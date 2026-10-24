@@ -9,10 +9,12 @@ const channel = process.env.PW_CHANNEL;
 
 export default defineConfig({
   fullyParallel: true,
+  // Full flows include the 2.5 s mock analysis; leave room on loaded machines.
+  timeout: 60_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
-  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: "disabled" } },
+  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: "disabled" } },
   use: { trace: "retain-on-failure", locale: "es-CO", timezoneId: "America/Bogota", ...(channel ? { channel } : {}) },
   projects: [
     { name: "web-desktop", testDir: "web", use: { baseURL: localUrl, viewport: { width: 1440, height: 900 } } },
