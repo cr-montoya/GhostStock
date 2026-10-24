@@ -33,7 +33,7 @@
   --radius-chip: 999px;
 
   /* Type */
-  --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+  --font-heading: "Fraunces Variable", ui-serif, Georgia, serif;
   --font-body: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-code: "Geist Mono Variable", ui-monospace, monospace;
 
@@ -41,5 +41,5 @@
   --duration-micro: 150ms;
   --duration-standard: 250ms;
   --duration-hero: 450ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-ghost: cubic-bezier(0.22, 1, 0.36, 1);
 }
