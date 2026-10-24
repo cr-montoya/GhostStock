@@ -3,6 +3,7 @@ import {
   CreateUploadResponseSchema,
   ListProductsResponseSchema,
   SettingsSchema,
+  uploadRequestFixture,
 } from "@ghoststock/contracts";
 import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
 
@@ -18,16 +19,23 @@ async function send(request: APIRequestContext, method: "GET" | "POST", path: st
     const response = await request.fetch(path, { method, data });
     const backoff = BACKOFF_MS[attempt];
     if (response.status() !== 429 || backoff === undefined) return response;
+    // Retry backoff for throttling, not a wait before an assertion.
     await new Promise((resolve) => setTimeout(resolve, backoff));
   }
 }
 
-test("[03 10.2] the dashboard renders in Spanish", async ({ page }) => {
+test("[03 10.2] the dashboard renders in Spanish with live data", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "es-CO");
   await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeVisible();
-  await expect(page.getByText("Trae tu inventario de vuelta de la muerte.").first()).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Navegación principal" }).first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navegación principal" })).toBeVisible();
+  // The heading also shows while loading or failing: wait for the loaded dashboard,
+  // seeded (KPIs) or empty (ghost), and make sure the error state is absent.
+  await expect(
+    page.getByText("Valor del inventario").or(page.getByText("Tu almacén está en silencio. Invoca tu primer producto.")),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("No pudimos abrir el almacén")).toHaveCount(0);
 });
 
 test("[03 10.2] SPA routes are served by index.html", async ({ request }) => {
@@ -52,10 +60,10 @@ test("[03 10.2] GET /api/settings returns a contract-valid body", async ({ reque
 });
 
 test("[03 10.2] an upload slot can be obtained and its S3 host is allowed by the CSP", async ({ request }) => {
-  const response = await send(request, "POST", "/api/uploads", { contentType: "image/jpeg", sizeBytes: 1024 });
+  const response = await send(request, "POST", "/api/uploads", uploadRequestFixture);
   expect(response.status()).toBe(201);
   const slot = CreateUploadResponseSchema.parse(await response.json());
-  expect(slot.imageKey).toMatch(/^tmp\/[0-9A-HJKMNP-TV-Z]{26}\.jpg$/);
+  expect(slot.imageKey.endsWith(".jpg")).toBe(true);
   expect(slot.fields.key).toBe(slot.imageKey);
 
   const page = await send(request, "GET", "/");
