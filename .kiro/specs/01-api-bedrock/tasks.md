@@ -14,7 +14,7 @@ The commit that creates `services/api/package.json` carries
     `lib/observability.ts`, `lib/ids.ts` with unit tests.
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 8.1_
 
-- [ ] 2. Uploads
+- [x] 2. Uploads
   - `adapters/s3.ts` `presignPost`, `services/uploads.ts`, `handlers/uploads.ts`.
   - Unit tests: conditions, key format, 415, 413.
   - _Requirements: 1.1, 1.2, 1.3_
