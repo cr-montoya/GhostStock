@@ -1,4 +1,5 @@
 import { devices, expect, type Page } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 
 const { defaultBrowserType: _browser, ...pixel7 } = devices["Pixel 7"];
 
@@ -17,5 +18,8 @@ export async function capture(page: Page, name: string) {
   const width = page.viewportSize()?.width ?? 1440;
   const height = await page.evaluate(() => document.documentElement.scrollHeight);
   await page.setViewportSize({ width, height });
-  await expect(page).toHaveScreenshot(name);
+  // The 4% film grain is random noise: it bloats PNG baselines and adds nothing to a diff.
+  await expect(page).toHaveScreenshot(name, { stylePath: GRAIN_OFF });
 }
+
+const GRAIN_OFF = fileURLToPath(new URL("./grain-off.css", import.meta.url));
