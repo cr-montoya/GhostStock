@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# Secrets and local config (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+secrets/
+
+# Local harness state
+.harness/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
