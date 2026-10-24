@@ -30,6 +30,14 @@ Region `us-east-1`. The account comes from your CLI credentials.
   `us-east-1`. Check with `aws sts get-caller-identity`.
 - The infra PR merged into `main`: the pipeline builds from `main`, never from a local
   branch.
+- Lambda concurrency quota of at least 15. The analyses function reserves 5, and Lambda
+  keeps 10 unreserved, so an account limited to 10 fails the first Prod deploy with
+  "decreases account's UnreservedConcurrentExecution below its minimum value". Check:
+  ```sh
+  aws lambda get-account-settings --region us-east-1 --query AccountLimit.ConcurrentExecutions
+  ```
+  If it prints less than 15, request an increase in Service Quotas (Lambda, Concurrent
+  executions) before deploying.
 
 ## 1. Bedrock model access
 
@@ -90,9 +98,13 @@ pnpm exec cdk deploy GhostStockPipeline \
 
 - `pnpm build` must run first: `BucketDeployment` packages `apps/web/dist`, and
   `cdk synth` fails if it is missing.
-- `connectionArn` and `budgetEmail` are stored as environment variables of the
-  pipeline's synth step and passed back as `-c` on every later run, so they never live
-  in git. `budgetEmail` is optional; without it no budget is created.
+- `connectionArn` and `budgetEmail` are stored as plaintext environment variables of
+  the pipeline's synth step and passed back as `-c` on every later run, so they never
+  live in git (neither is a secret). `budgetEmail` is optional; without it no budget is
+  created and synth prints a warning.
+- Any later manual `cdk deploy GhostStockPipeline` must pass both `-c` values again:
+  without them the stored values are overwritten with empty ones, the Source stage
+  breaks and the budget is removed on the next run.
 - Without `connectionArn`, synth uses a placeholder and prints a warning; a pipeline
   deployed that way fails at its Source stage.
 - The command deploys only the pipeline. The pipeline then runs on its own: Source,
@@ -137,14 +149,20 @@ the deploy.
 
 ## 8. Teardown (owner only)
 
+Destroy the pipeline first, so a merge in between cannot redeploy the app. `cdk
+destroy` synthesizes the app, so build first:
+
 ```sh
-aws cloudformation delete-stack --stack-name Prod-GhostStockAppStack --region us-east-1
-aws cloudformation wait stack-delete-complete --stack-name Prod-GhostStockAppStack --region us-east-1
+pnpm install --frozen-lockfile
+pnpm build
 cd infra
 pnpm exec cdk destroy GhostStockPipeline -c connectionArn=<CONNECTION_ARN>
+aws cloudformation delete-stack --stack-name Prod-GhostStockAppStack --region us-east-1
+aws cloudformation wait stack-delete-complete --stack-name Prod-GhostStockAppStack --region us-east-1
 ```
 
 Buckets, table and log groups of the app stack are deleted with it (demo settings).
 Left behind on purpose, delete them by hand if you want a clean account: the pipeline
-artifacts bucket (retained by CDK Pipelines), CodeBuild log groups, the
-CodeConnections connection and the `CDKToolkit` stack.
+artifacts bucket (retained by CDK Pipelines), CodeBuild log groups, the log group of
+the `autoDeleteObjects` helper Lambda, the CodeConnections connection and the
+`CDKToolkit` stack.

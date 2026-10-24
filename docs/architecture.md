@@ -53,12 +53,12 @@ pnpm through corepack ([ADR 0011](adr/0011-pnpm-workspaces.md)).
 
 | Service | Resource | Responsibility | Key settings |
 | --- | --- | --- | --- |
-| CloudFront | distribution, CloudFront Function, response headers policy | Only public entry; SPA routing; security headers | HTTPS redirect, HTTP/2 and 3, OAC to both buckets, no custom error responses, HSTS, CSP, `X-Frame-Options: DENY` |
+| CloudFront | distribution, CloudFront Function, response headers policy | Only public entry; SPA routing; security headers | HTTPS (redirect for SPA and media, HTTP rejected on `/api/*`), HTTP/2 and 3, OAC to both buckets, no custom error responses, HSTS, CSP, `X-Frame-Options: DENY` |
 | S3 | web bucket | Built SPA (`apps/web/dist`) | private, SSE-S3, TLS only, owner enforced; published by `BucketDeployment` with `/*` invalidation |
-| S3 | media bucket | Raw uploads (`tmp/`, deleted after 1 day) and saved photos (`media/products/`) | private, SSE-S3, TLS only, CORS `POST` only |
+| S3 | media bucket | Raw uploads (`tmp/`, deleted after 1 day) and saved photos (`media/products/`) | private, SSE-S3, TLS only, CORS `POST` only; CloudFront (OAC) may read `media/products/*` only |
 | API Gateway | HTTP API | Routes `/api/*` to three functions | default stage throttling burst 10 / rate 5, JSON access logs 14 days, no CORS, no authorizer (single-workspace demo) |
 | Lambda | `uploads` | Presigned POST for `tmp/<ulid>.<ext>` | Node.js 22 arm64, 256 MB, 10 s; `s3:PutObject` on `tmp/*` |
-| Lambda | `analyses` | Bedrock Converse on an uploaded image | 1024 MB, 28 s, reserved concurrency 5; read `tmp/*`, list with `tmp/*` prefix, `bedrock:InvokeModel` on the profile and its models |
+| Lambda | `analyses` | Bedrock Converse on an uploaded image | 1024 MB, 28 s, reserved concurrency 5; read `tmp/*`, list with `tmp/*` prefix, `bedrock:InvokeModel` on the profile, and on its models only through the profile |
 | Lambda | `inventory` | Products, settings, unknown-route `NOT_FOUND` | 256 MB, 10 s; table read and write, read `tmp/*`, write `media/products/*` |
 | DynamoDB | single table (`PK`, `SK`) | Products and settings ([ADR 0005](adr/0005-single-table-and-client-side-aggregates.md)) | on demand, AWS managed KMS key, point-in-time recovery |
 | Bedrock | US cross-region inference profile | Product candidates from a photo ([ADR 0007](adr/0007-bedrock-structured-output-and-honest-ai.md)) | model id from `infra/cdk.json` |
@@ -75,6 +75,9 @@ both stacks at synth; every accepted finding has a written reason in
 
 - The distribution uses the default `*.cloudfront.net` certificate, so CloudFront fixes
   the viewer TLS policy and `minimumProtocolVersion` cannot be enforced. TLS 1.2 minimum
-  arrives with a custom domain (ADR 0006 follow-up).
+  arrives with a custom domain (spec 03 requirement 6.4).
 - No authentication, by product decision: throttling, reserved concurrency, the upload
   size cap and the budget alarm bound abuse and cost.
+- The HTTP API's default `execute-api` endpoint stays enabled, so the API can be called
+  without CloudFront (and without its security headers). Stage throttling still
+  applies. Disabling it needs a custom domain on the API.
