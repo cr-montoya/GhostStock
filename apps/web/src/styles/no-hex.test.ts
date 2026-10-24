@@ -10,7 +10,7 @@ const HEX = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b/gi;
 
 function sourceFiles(): string[] {
   return readdirSync(SRC, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !entry.name.endsWith(".test.ts"))
+    .filter((entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name))
     .map((entry) => relative(SRC, join(entry.parentPath, entry.name)).replaceAll("\\", "/"));
 }
 
@@ -20,7 +20,7 @@ describe("[02 1.1] design tokens", () => {
       .filter((file) => !ALLOWED.has(file))
       .flatMap((file) => {
         // Ignore URL-encoded fragments (%23) and in-page anchors like href="#contenido".
-        const text = readFileSync(join(SRC, file), "utf8").replace(/href="#[\w-]+"/g, "");
+        const text = readFileSync(join(SRC, file), "utf8").replace(/href=["']#[\w-]+["']/g, "");
         return [...text.matchAll(HEX)].map((match) => `${file}: ${match[0]}`);
       });
     expect(offenders).toEqual([]);
