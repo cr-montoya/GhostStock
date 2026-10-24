@@ -49,7 +49,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
     and restore, success navigates to `/` with toast, failure keeps edits.
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3_
 
-- [ ] 8. Dashboard
+- [x] 8. Dashboard
   - KPI cards with count-up, charts, low-stock list, recent grid, empty state.
   - Playwright: KPI values equal `computeInventoryStats(productsFixture)`; `empty`
     scenario shows the ghost and CTA.
