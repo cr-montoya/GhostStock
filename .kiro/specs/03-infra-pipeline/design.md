@@ -103,7 +103,11 @@ runtimes" table lists Node.js 22 for it, and Ubuntu supports `playwright install
 --with-deps`; `runtime-versions: nodejs: 22` pins the runtime in every project's
 buildspec. The Test step calls `playwright test --project=web-desktop` directly
 because the e2e `test:web` script already selects both web projects. Every step starts with `corepack enable` (bundled with Node.js 22) so the exact pnpm
-version from the root `packageManager` field is used; npm is never invoked.
+version from the root `packageManager` field is used; our steps never invoke npm. The
+steps CDK Pipelines generates (self-mutation, asset publishing) install the CDK CLI
+and `cdk-assets` with `npm install -g`; both are pinned (`cliVersion` = the infra
+`aws-cdk` devDependency, `cdkAssetsCliVersion`) so a release cannot change the
+pipeline without a commit.
 `connectionArn` is used only by the pipeline stack; the app stage never reads it.
 Every ShellStep gets `input: source` explicitly: the synth output only contains
 `infra/cdk.out`, and the test steps need the whole repository. `pnpm build` runs
@@ -122,7 +126,13 @@ before tests because contracts export `dist/` and `BucketDeployment` needs
 | inventory fn | 256 MB, 10 s, env `MEDIA_BUCKET`, `TABLE_NAME`, `LOW_STOCK_DEFAULT` |
 | HTTP API | routes per `architecture.md` plus `$default` to inventory, `HttpLambdaIntegration`, default stage throttle 10/5, access log group JSON 14 days |
 | Distribution | see below |
-| Budget | `CfnBudget` COST MONTHLY `budgetUsd`, ACTUAL 80% and 100% to `budgetEmail`, only if provided |
+| Budget | `CfnBudget` COST MONTHLY `budgetUsd`, ACTUAL 80% and 100% to `budgetEmail`, only if provided; otherwise a `ghoststock:no-budget` synth warning |
+| BucketDeployment | explicit 14 day `LogGroup` (DESTROY) so the helper's logs leave with the stack |
+
+`infra/cdk.json` carries the CDK recommended feature flags (from
+`aws-cdk-lib/recommended-feature-flags.json`), set before the first deploy because
+adding them later can replace resources. Among other effects, error annotations fail
+synth and ARNs use the literal `aws` partition.
 
 `ApiFunction` defaults: `runtime NODEJS_22_X`, `architecture ARM_64`,
 `bundling { minify: true, sourceMap: true, target: "node22", tsconfig:
@@ -143,8 +153,10 @@ IAM per function (explicit `PolicyStatement`s, no broad grants):
 - uploads: `s3:PutObject` on `${mediaBucket.bucketArn}/tmp/*`.
 - analyses: `s3:GetObject` on `.../tmp/*`; `s3:ListBucket` on the bucket ARN with
   `StringLike s3:prefix tmp/*`; `bedrock:InvokeModel` on
-  `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}` and
-  `arn:aws:bedrock:*::foundation-model/${modelId without the "us." prefix}`.
+  `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}`, and on
+  `arn:aws:bedrock:*::foundation-model/${modelId without the "us." prefix}` only with
+  `StringEquals bedrock:InferenceProfileArn = <that profile ARN>` (no direct model
+  calls).
 - inventory: DynamoDB actions from `security.md` on the table ARN; `s3:GetObject` on
   `.../tmp/*`; `s3:ListBucket` with the same `tmp/*` prefix condition; `s3:PutObject`
   on `.../media/products/*`.
@@ -169,7 +181,7 @@ new cloudfront.Distribution(this, "Distribution", {
                 cachePolicy: CACHING_DISABLED,
                 originRequestPolicy: ALL_VIEWER_EXCEPT_HOST_HEADER,
                 viewerProtocolPolicy: HTTPS_ONLY, responseHeadersPolicy: headers },
-    "/media/*": { origin: S3BucketOrigin.withOriginAccessControl(mediaBucket),
+    "/media/*": { origin: S3BucketOrigin.withOriginAccessControl(mediaBucketRef),
                   cachePolicy: CACHING_OPTIMIZED, viewerProtocolPolicy: REDIRECT_TO_HTTPS,
                   responseHeadersPolicy: headers },
   },
@@ -182,7 +194,12 @@ fixes the viewer security policy and CDK ignores the prop (synth warning). TLS 1
 minimum is set together with a custom domain certificate (requirement 6.4).
 
 Only keys under `media/` are reachable because CloudFront forwards the path as the
-key; `tmp/` objects are never addressable through the distribution.
+key. Defense in depth: the media origin uses a `Bucket.fromBucketAttributes` reference,
+so CDK does not write its default OAC grant on `bucket/*` (its warning is
+acknowledged), and the stack adds one bucket policy statement instead: principal
+`cloudfront.amazonaws.com`, `s3:GetObject` on `media/products/*`, condition
+`AWS:SourceArn` = the distribution ARN. `tmp/` uploads stay unreadable even if routing
+changes.
 `spa-rewrite.js`: if the URI has no file extension and does not start with `/api/` or
 `/media/`, set it to `/index.html`.
 
@@ -205,7 +222,9 @@ the App would exist, so an App-level aspect never checks the app stack.
 - `AwsSolutions-IAM5` narrowed with `appliesTo`: our `tmp/*` and `media/products/*`
   object ARNs and the `foundation-model/*` region wildcard; BucketDeployment's S3
   wildcards and `cloudfront:CreateInvalidation` on `*`; CDK Pipelines roles (artifacts
-  bucket, CodeBuild logs and reports, bootstrap roles).
+  bucket, CodeBuild logs and reports, bootstrap roles). `Resource::*` in the pipeline
+  is suppressed by path only on the asset FileRole and the SelfMutation role, so a `*`
+  added anywhere else fails synth.
 - `AwsSolutions-CB4` CodeBuild without a KMS key (single account, no
   `crossAccountKeys`).
 - `AwsSolutions-L1` our functions (runtime pinned to 22 by this spec) and CDK helper
@@ -215,14 +234,19 @@ the App would exist, so an App-level aspect never checks the app stack.
 
 Vitest with `Template.fromStack`, context `aws:cdk:bundling-stacks: []` to skip
 esbuild in tests, and asset paths (`AppAssetPaths`) pointed at `test/fixtures` so tests
-need neither the api handlers nor a web build. Assertions: bucket hardening and lifecycle and CORS; table keys and
-PITR; each function runtime, architecture, timeout, memory, concurrency, env; each
-role policy matches the IAM table exactly, including the `s3:ListBucket` prefix
-condition; `ApiFunction` bundling has `externalModules: []` and the ESM banner;
-missing `connectionArn` synthesizes with a warning; HTTP API routes, throttling, no CORS;
-distribution behaviors, OAC, function association, no custom error responses; CSP
-contains the media bucket domain; `BucketDeployment` with invalidation; budget only
+need neither the api handlers nor a web build. Assertions: bucket hardening and
+lifecycle and CORS; table keys and PITR; each function runtime, architecture, timeout,
+memory, concurrency, env and its own 14 day log group; each role policy matches the
+IAM table exactly, including the `s3:ListBucket` prefix condition and the Bedrock
+inference profile condition; `ApiFunction` source declares `externalModules: []` and
+the ESM banner (bundling options never reach the template; `cdk synth` exercises the
+real bundle); missing `connectionArn` or `budgetEmail` synthesizes with a warning;
+HTTP API routes, the function behind every route including `$default`, throttling, no
+CORS; distribution behaviors (redirect vs HTTPS only), OAC, function association, no
+custom error responses; the media bucket lets CloudFront read only `media/products/*`;
+CSP contains the media bucket domain; `BucketDeployment` with invalidation; budget only
 when email given; pipeline `selfMutation`, synth env vars, test steps only when
-`enableTests`, each with the source as input; config validation errors; `Annotations` has no cdk-nag errors;
-the Prod stage reports an unhardened bucket (proves its aspect runs); every
-suppression has a reason; the SPA rewrite function source is run in a VM.
+`enableTests`, each with the source artifact as input, pinned CDK CLI and
+`cdk-assets`; config validation errors; `Annotations` has no cdk-nag errors; the Prod
+stage fails synth on an unhardened bucket (proves its aspect runs); every suppression
+has a reason; the SPA rewrite function source is run in a VM.
