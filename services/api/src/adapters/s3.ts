@@ -1,4 +1,4 @@
-import { GetObjectCommand, HeadObjectCommand, type S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, GetObjectCommand, HeadObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { MAX_UPLOAD_BYTES, type ImageContentType } from "@ghoststock/contracts";
 import { AppError } from "../lib/errors.js";
@@ -20,6 +20,21 @@ export async function headImage(s3: S3Client, bucket: string, key: string): Prom
   try {
     const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
     return { contentLength: head.ContentLength ?? 0, contentType: head.ContentType };
+  } catch (error) {
+    throw mapS3Error(error);
+  }
+}
+
+/**
+ * Copies the raw upload to a kept `media/products/<ulid>.<ext>` key (same extension).
+ * A source that expired or never existed is `IMAGE_NOT_FOUND`.
+ */
+export async function copyToMedia(s3: S3Client, bucket: string, imageKey: string, id: string): Promise<string> {
+  const ext = imageKey.slice(imageKey.lastIndexOf(".") + 1);
+  const mediaKey = `media/products/${id}.${ext}`;
+  try {
+    await s3.send(new CopyObjectCommand({ Bucket: bucket, Key: mediaKey, CopySource: `${bucket}/${imageKey}` }));
+    return mediaKey;
   } catch (error) {
     throw mapS3Error(error);
   }
