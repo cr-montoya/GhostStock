@@ -51,12 +51,14 @@ The commit that creates `services/api/package.json` carries
     `@bedrock` tests call the real model. The project runs in series (one worker, specs
     in order per file) because the stage throttling is a cost and security control; only
     an API Gateway `429` is retried, at most 4 times with backoff.
+  - Created products are deleted; their photo under `media/products/` is kept by
+    design, and `tmp/` uploads expire after 1 day.
   - Run 2026-10-24 against the deployed stack (model Amazon Nova Pro, ADR 0012): 16 of 18
     passed on the full run; 3.1 then passed on a rerun (the first failure was a stalled
     browser-side S3 upload from the local network, before any API call). 3.4 failed for
     real: Nova words image errors with "model", so they mapped to `503 MODEL_UNAVAILABLE`;
-    fixed by checking the image rule first (unit tested), live check pending a redeploy. Created products are deleted; their photo under
-    `media/products/` is kept by design, and `tmp/` uploads expire after 1 day.
+    fixed by checking the image rule before the model rule and by no longer treating
+    bare "model" as a model problem (unit tested); live check pending a redeploy.
   - _Requirements: 9.2, 9.3_
 
 - [x] 8. Verify and sync
