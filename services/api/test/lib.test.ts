@@ -5,7 +5,6 @@ import { AppError } from "../src/lib/errors.js";
 import { ulid } from "../src/lib/ids.js";
 import { handler as analyses } from "../src/handlers/analyses.js";
 import { handler as inventory } from "../src/handlers/inventory.js";
-import { handler as uploads } from "../src/handlers/uploads.js";
 import { apiEvent, lambdaContext } from "./helpers.js";
 
 describe("ulid", () => {
@@ -50,7 +49,6 @@ describe("envLoader", () => {
 
 describe("handler entry points (task 1 stubs)", () => {
   it.each([
-    ["uploads", uploads],
     ["analyses", analyses],
     ["inventory", inventory],
   ])("%s answers 500 INTERNAL_ERROR in the envelope", async (_name, handler) => {
