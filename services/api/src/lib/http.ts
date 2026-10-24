@@ -35,8 +35,10 @@ export function parseJson<T extends z.ZodType>(
   classify?: (error: z.ZodError) => ErrorCode,
 ): z.infer<T> {
   const raw = event.body ?? "";
-  const bytes = event.isBase64Encoded ? Buffer.from(raw, "base64") : Buffer.from(raw, "utf8");
-  if (bytes.byteLength > MAX_BODY_BYTES) {
+  // Cheap bound on the encoded length first, so an oversized body is never decoded.
+  const maxEncoded = event.isBase64Encoded ? Math.ceil(MAX_BODY_BYTES / 3) * 4 : MAX_BODY_BYTES;
+  const bytes = raw.length > maxEncoded ? undefined : Buffer.from(raw, event.isBase64Encoded ? "base64" : "utf8");
+  if (bytes === undefined || bytes.byteLength > MAX_BODY_BYTES) {
     throw new AppError("VALIDATION_ERROR", `Request body exceeds ${MAX_BODY_BYTES} bytes`);
   }
   let data: unknown;
@@ -60,10 +62,16 @@ export function validate<T extends z.ZodType>(
   throw new AppError(code, code === "VALIDATION_ERROR" ? describeIssues(parsed.error) : undefined);
 }
 
-// Paths and zod messages only: never echo the received values back.
+const MAX_MESSAGE_CHARS = 300;
+
+// Schema paths and zod messages only: never echo received values or unknown key names.
 function describeIssues(error: z.ZodError): string {
-  const parts = error.issues.slice(0, 5).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`);
-  return `${DEFAULT_ERROR_MESSAGES.VALIDATION_ERROR}: ${parts.join("; ")}`;
+  const parts = error.issues.slice(0, 5).map((issue) => {
+    const where = issue.path.map(String).join(".") || "(root)";
+    const what = issue.code === "unrecognized_keys" ? "unrecognized key(s)" : issue.message;
+    return `${where}: ${what}`;
+  });
+  return `${DEFAULT_ERROR_MESSAGES.VALIDATION_ERROR}: ${parts.join("; ")}`.slice(0, MAX_MESSAGE_CHARS);
 }
 
 export function errorBody(code: ErrorCode, message: string, requestId: string): ApiError {
@@ -82,14 +90,14 @@ export function withErrors(fn: RouteHandler) {
     logger.appendKeys({ requestId, route });
     try {
       const result = await fn(event, context);
-      logger.info("request completed", { status: result.statusCode });
+      logger.info("request completed", { requestId, route, status: result.statusCode });
       return result;
     } catch (error) {
       const appError = error instanceof AppError ? error : undefined;
       const code: ErrorCode = appError?.code ?? "INTERNAL_ERROR";
       const status = ERROR_HTTP_STATUS[code];
       const message = appError?.message ?? DEFAULT_ERROR_MESSAGES.INTERNAL_ERROR;
-      const details = { status, errorCode: code, ...describeCause(appError ? appError.cause : error) };
+      const details = { requestId, route, status, errorCode: code, ...describeCause(appError ? appError.cause : error) };
       if (status >= 500) logger.error("request failed", details);
       else logger.warn("request rejected", details);
       return json(status, errorBody(code, message, requestId));
@@ -99,8 +107,20 @@ export function withErrors(fn: RouteHandler) {
   };
 }
 
-// Error class and message only; AWS SDK messages carry no image data or presigned URLs.
-function describeCause(cause: unknown): Record<string, string> {
-  if (cause instanceof Error) return { causeName: cause.name, causeMessage: cause.message };
-  return {};
+const MAX_CAUSE_CHARS = 200;
+
+/**
+ * The error class always; the message only for AWS SDK service errors (they carry
+ * `$metadata`). Other messages may quote request bodies or model text (a JSON
+ * `SyntaxError`, a `ZodError`), which must never reach the logs (req 8.3).
+ */
+export function describeCause(cause: unknown): Record<string, string | number> {
+  if (!(cause instanceof Error)) return {};
+  const metadata = (cause as { $metadata?: { httpStatusCode?: number } }).$metadata;
+  if (metadata === undefined) return { causeName: cause.name };
+  return {
+    causeName: cause.name,
+    causeMessage: cause.message.slice(0, MAX_CAUSE_CHARS),
+    ...(metadata.httpStatusCode === undefined ? {} : { causeHttpStatus: metadata.httpStatusCode }),
+  };
 }
