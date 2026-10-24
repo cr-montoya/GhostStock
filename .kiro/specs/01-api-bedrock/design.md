@@ -76,7 +76,8 @@ export const handler = withErrors(async (event: APIGatewayProxyEventV2) => {
 `withErrors` maps `AppError` to `ApiErrorSchema` with `ERROR_HTTP_STATUS`, logs once,
 adds `requestId` (`event.requestContext.requestId`), and turns anything else into
 `INTERNAL_ERROR`. Responses always set `content-type: application/json` and
-`cache-control: no-store`.
+`cache-control: no-store`. `parseJson` decodes the body when
+`event.isBase64Encoded` is true before parsing.
 
 `inventory.ts` dispatches on `event.routeKey`:
 `GET /api/products`, `POST /api/products`, `GET /api/products/{id}`,
@@ -91,13 +92,19 @@ adds `requestId` (`event.requestContext.requestId`), and turns anything else int
 `Conditions: [["content-length-range", 1, MAX_UPLOAD_BYTES], ["eq", "$Content-Type",
 contentType]]`, `Expires: 300`. Extension map: jpeg -> jpg, png -> png, webp -> webp.
 
+Request validation mapping (the only place zod issues are not all `400`): an issue on
+`contentType` -> `415 UNSUPPORTED_MEDIA_TYPE`; a `too_big` issue on `sizeBytes` ->
+`413 IMAGE_TOO_LARGE`; anything else -> `400 VALIDATION_ERROR`.
+
 ## Analyses
 
 1. `HeadObject`: `NotFound` -> `IMAGE_NOT_FOUND`; `ContentLength > MAX_UPLOAD_BYTES`
    -> `IMAGE_TOO_LARGE`; `ContentType` not allowed -> `UNSUPPORTED_MEDIA_TYPE`.
 2. `GetObject` -> `Body.transformToByteArray()`.
 3. `converseWithTool` with `toolChoice: { tool: { name: "report_products" } }`,
-   `temperature: 0`, `maxTokens: 2000`, `abortSignal` at 25 s.
+   `temperature: 0`, `maxTokens: 2000`. The client is created with `maxAttempts: 1`;
+   one `AbortController` deadline of 25 s spans every attempt and backoff, so the
+   handler always answers with the envelope before the 28 s Lambda timeout.
 4. Retry policy and error mapping exactly as `ai-integration.md`.
 5. `ModelOutputSchema.safeParse(toolUse.input)`; map to `ProductCandidate` with
    `candidateId: ulid()`.
