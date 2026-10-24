@@ -1,6 +1,6 @@
 # ADR 0008: One AppStack and a self-mutating CDK Pipeline
 
-- **Status:** accepted
+- **Status:** accepted, amended by 0011 (pnpm)
 - **Date:** 2026-10-24
 - **Spec:** `.kiro/specs/03-infra-pipeline/`
 

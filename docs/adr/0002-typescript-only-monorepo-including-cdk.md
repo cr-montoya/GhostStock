@@ -1,6 +1,6 @@
 # ADR 0002: TypeScript-only monorepo, CDK included
 
-- **Status:** accepted
+- **Status:** accepted, amended by 0011 (pnpm)
 - **Date:** 2026-10-24
 - **Spec:** `.kiro/specs/00-contracts/`, `.kiro/specs/03-infra-pipeline/`
 
