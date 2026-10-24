@@ -8,7 +8,8 @@ Decisions and their reasons: #[[file:docs/adr/README.md]]
 
 ## Repository layout
 
-npm workspaces monorepo, TypeScript everywhere (ADR 0002). Node.js 22 (`.nvmrc`).
+pnpm workspaces monorepo (ADR 0011), TypeScript everywhere (ADR 0002). Node.js 22
+(`.nvmrc`). Internal dependencies use `workspace:*`; never npm or npx.
 
 ```
 packages/contracts/  zod 4 schemas, inferred types, fixtures       spec 00-contracts

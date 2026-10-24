@@ -14,7 +14,7 @@ You prove the spec is met; you never take the builder's word for it.
    (tests only, never production code) or report the gap. Rules:
    `.kiro/steering/testing.md`.
 3. Run the suites and report real output, failures first, trimmed:
-   `npm test -w <workspace>`, `npx playwright test -c e2e --project=web-desktop
+   `pnpm --filter <workspace> test`, `pnpm --filter @ghoststock/e2e exec playwright test --project=web-desktop
    --project=web-mobile`, and `--project=api` / `--project=smoke` when a `BASE_URL`
    exists. Attach the Playwright HTML report path for failures.
 4. Exercise the unhappy paths through MSW scenarios and the API: zero detections,

@@ -140,8 +140,8 @@ spec files:
 | `api` | `api` | `baseURL process.env.BASE_URL` |
 | `smoke` | `smoke` | `baseURL process.env.BASE_URL` |
 
-`webServer` is defined as `process.env.BASE_URL ? undefined : { command: "npm run dev
--w @ghoststock/web", url: "http://localhost:5173", reuseExistingServer: true }`, so
+`webServer` is defined as `process.env.BASE_URL ? undefined : { command: "pnpm --filter @ghoststock/web
+dev", url: "http://localhost:5173", reuseExistingServer: true }`, so
 `--project=api` and `--project=smoke` (which require `BASE_URL`) never boot Vite. The
 e2e workspace has scripts per project and no `test` script.
 Specs: `ritual.spec.ts`, `resurrection.spec.ts`, `review.spec.ts`,

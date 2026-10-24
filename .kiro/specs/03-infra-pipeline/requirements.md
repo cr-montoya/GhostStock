@@ -31,7 +31,7 @@ and deploy, so that `main` is always what runs.
 
 1. THE pipeline stack SHALL define `pipelines.CodePipeline` with `selfMutation: true`
    and a CodeConnections GitHub source on `repo` and `branch`.
-2. THE synth step SHALL run `npm ci`, `npm run build` and `npx cdk synth` in `infra`
+2. THE synth step SHALL run `pnpm install --frozen-lockfile`, `pnpm build` and `pnpm exec cdk synth` in `infra`
    with `primaryOutputDirectory` `infra/cdk.out`, on a CodeBuild image with Node.js 22.
 3. THE pipeline SHALL persist `connectionArn` and `budgetEmail` as synth step
    environment variables and pass them back as `-c` context, so later self-mutations

@@ -11,7 +11,7 @@ description: >
 The UI is a judging criterion. "Works" is not enough: it must look premium.
 
 ## Steps
-1. Capture with Playwright: `npx playwright test -c e2e --project=visual`
+1. Capture with Playwright: `pnpm --filter @ghoststock/e2e exec playwright test --project=visual`
    (starts Vite with MSW). Update baselines only on purpose with
    `--update-snapshots` and review the diff images.
 2. Every screen at 1440x900 and Pixel 7: Almacén, Invocar (ritual, resurrection,

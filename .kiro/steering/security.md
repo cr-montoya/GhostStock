@@ -100,5 +100,5 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
 ## Supply chain
 
 - New runtime dependency in `services/api` or `infra`, or a new workspace, requires an
-  ADR (commit-msg gate). `package-lock.json` committed.
-- `npm audit --omit=dev` with no Critical or High before merge.
+  ADR (commit-msg gate). `pnpm-lock.yaml` committed.
+- `pnpm audit --prod` with no Critical or High before merge.
