@@ -1,6 +1,6 @@
 # ADR 0013: Manual teardown that keeps the pipeline
 
-- **Status:** accepted
+- **Status:** superseded by 0014
 - **Date:** 2026-10-24
 - **Spec:** `.kiro/specs/03-infra-pipeline/`
 

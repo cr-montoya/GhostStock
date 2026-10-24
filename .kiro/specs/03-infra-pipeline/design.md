@@ -114,22 +114,21 @@ Every ShellStep gets `input: source` explicitly: the synth output only contains
 before tests because contracts export `dist/` and `BucketDeployment` needs
 `apps/web/dist`.
 
-### Manual teardown (ADR 0013)
+### Manual teardown stage (ADR 0014, supersedes 0013)
 
-The pipeline stack also defines a CodeBuild project `GhostStock-Teardown` that is
-never wired into the pipeline, so no merge or pipeline run can start it. A person
-starts it (`aws codebuild start-build --project-name GhostStock-Teardown`, see
-`docs/deployment.md` step 8); it runs `aws cloudformation delete-stack` on the app
-stack and waits for `stack-delete-complete`. Besides CodeBuild's own logs and reports,
-its role may only
+After Prod the pipeline has a `Teardown` wave: `ApproveTeardown` (manual approval)
+then `DestroyApp` (CodeBuild step, runs only after the approval). Every run waits at
+the approval; nobody has to answer it, it expires after 7 days. Approving (console or
+`put-approval-result`, see `docs/deployment.md` step 8) runs `aws cloudformation
+delete-stack` on the app stack and waits for `stack-delete-complete`. Besides
+CodeBuild's own logs and reports, the step role may only
 `cloudformation:DeleteStack` and `DescribeStacks` on the app stack and
 `iam:PassRole` the CDK bootstrap CloudFormation execution role (condition
 `iam:PassedToService = cloudformation.amazonaws.com`). Buckets empty themselves
 (`autoDeleteObjects`) and every app resource uses `RemovalPolicy.DESTROY`; only the
 implicit log group of the `autoDeleteObjects` helper Lambda remains, together with the
 pipeline, its artifacts bucket and logs. A V2 pipeline with no executions costs
-nothing, and starting the pipeline redeploys the app. The stack outputs
-`TeardownProject` with the project name.
+nothing, and starting the pipeline redeploys the app.
 
 ## App stack
 

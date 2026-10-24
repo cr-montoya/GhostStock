@@ -117,6 +117,8 @@ export function suppressPipelineStackFindings(stack: Stack, pipeline: IConstruct
           "^Resource::arn:(<AWS::Partition>|aws):(logs|codebuild):[a-z0-9-]+:[0-9]+:(log-group:\\/aws\\/codebuild\\/|report-group\\/).*\\*$",
         ),
         regex("^Resource::arn:\\*:iam::[0-9]+:role\\/\\*$"),
+        // Teardown step (ADR 0014): the app stack id suffix is unknown before deploy.
+        regex("^Resource::arn:(<AWS::Partition>|aws):cloudformation:[a-z0-9-]+:[0-9]+:stack\\/Prod-GhostStockAppStack\\/\\*$"),
       ],
     },
     NO_ACCESS_LOGS,
