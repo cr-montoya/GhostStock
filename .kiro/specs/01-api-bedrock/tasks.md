@@ -31,14 +31,14 @@ The commit that creates `services/api/package.json` carries
     large, wrong type, happy path with candidate ids.
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 8.2, 8.3_
 
-- [ ] 5. Products
+- [x] 5. Products
   - `adapters/dynamo.ts`, `services/products.ts`; copy then batch write; list, get,
     update, delete.
   - Unit tests: create happy path, missing image, partial batch failure, pagination,
     newest first, update and delete not found.
   - _Requirements: 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 6. Settings and inventory router
+- [x] 6. Settings and inventory router
   - `services/settings.ts`, `handlers/inventory.ts` routeKey switch.
   - Unit tests: default from env, stored value, unknown route.
   - _Requirements: 6.1, 6.2_
