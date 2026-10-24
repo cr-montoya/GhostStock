@@ -65,12 +65,12 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - `ThresholdForm`; dashboard and inventory react to the saved threshold.
   - _Requirements: 9.1_
 
-- [ ] 11. Accessibility, motion and visual pass
+- [x] 11. Accessibility, motion and visual pass
   - `a11y.spec.ts` (axe on every screen), `motion.spec.ts` (reduced motion), keyboard
     path, `visual` baselines for every screen and state; run `visual-qa`.
   - _Requirements: 10.1, 10.3, 10.4, 11.3, 11.4_
 
-- [ ] 12. Verify and sync
+- [x] 12. Verify and sync
   - `pnpm --filter @ghoststock/web build` (no MSW in bundle), web e2e green on both
     viewports, `spec-sync`, `docs/demo.md` first draft.
   - _Requirements: 11.2, 11.3_
