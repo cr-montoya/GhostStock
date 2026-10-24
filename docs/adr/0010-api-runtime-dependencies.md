@@ -21,7 +21,9 @@ justified. The Lambda bundle should stay small and use official packages only.
 Runtime: `@ghoststock/contracts`, `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`,
 `@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb`, `@aws-sdk/client-bedrock-runtime`
 (official AWS), `@aws-lambda-powertools/logger` and `@aws-lambda-powertools/metrics`
-(official AWS), `ulid` (time-sortable ids used as sort keys). All bundled by esbuild.
+(official AWS), `ulid` (time-sortable ids used as sort keys), `zod` (same pinned version
+as `@ghoststock/contracts`, already in the bundle through it; the API imports it
+directly to validate its environment and to type schema helpers). All bundled by esbuild.
 
 ## Consequences
 
