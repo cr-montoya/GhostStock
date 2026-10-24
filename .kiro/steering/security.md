@@ -67,7 +67,8 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
 
 ## CloudFront
 
-- HTTPS only (redirect), TLS 1.2 minimum, HTTP/2 and 3.
+- HTTPS only (redirect), HTTP/2 and 3. TLS 1.2 minimum comes with a custom domain: the
+  default `*.cloudfront.net` certificate fixes the viewer TLS policy.
 - Response headers policy: HSTS (1 year, includeSubDomains), `X-Content-Type-Options:
   nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
   and CSP:

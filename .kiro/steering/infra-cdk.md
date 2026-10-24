@@ -28,7 +28,8 @@ validated at synth time with `InfraConfigSchema` from `@ghoststock/contracts`.
 
 ## Lambdas
 
-- `NodejsFunction`, `nodejs22.x`, arm64, esbuild as a local devDependency (no Docker),
+- `NodejsFunction`, `nodejs22.x`, arm64, esbuild as a root devDependency (no Docker;
+  CDK runs `pnpm exec esbuild` from `projectRoot`),
   minify, source maps, `projectRoot` = repo root, `depsLockFilePath` = root
   `pnpm-lock.yaml`, entries in `services/api/src/handlers/*.ts`.
 - Explicit `LogGroup` per function with 14 day retention (not the deprecated

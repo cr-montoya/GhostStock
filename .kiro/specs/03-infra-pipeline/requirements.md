@@ -96,10 +96,12 @@ photos.
    `/index.html`; `/api/*` to the HTTP API with caching disabled, all methods, and all
    viewer headers except Host; `/media/*` to the media bucket through OAC with caching
    optimized.
-2. THE distribution SHALL redirect HTTP to HTTPS, require TLS 1.2 or later, enable
-   HTTP/2 and 3, and attach the response headers policy from `security.md`, with the
-   media bucket host, in both the regional and the global S3 form, in `connect-src`.
+2. THE distribution SHALL redirect HTTP to HTTPS, enable HTTP/2 and 3, and attach the
+   response headers policy from `security.md`, with the media bucket host, in both the regional and the global S3 form, in `connect-src`.
 3. THE distribution SHALL NOT use distribution-wide custom error responses.
+4. WHERE a custom domain certificate is configured, THE distribution SHALL require TLS
+   1.2 or later. (The default `*.cloudfront.net` certificate fixes the viewer TLS
+   policy, so this applies only with a custom domain.)
 
 ### Requirement 7: Frontend publishing
 
