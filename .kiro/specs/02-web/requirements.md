@@ -1,92 +1,178 @@
-# Requirements: 02-web
+# Requirements Document: 02-web
 
-## Overview
+## Introduction
 
-React 18 SPA (Vite, Tailwind CSS, shadcn/ui, Framer Motion). UI fully in Spanish.
-Communicates with the API through same-origin `/api/*`. All types come from
-`@ghoststock/contracts`. MSW mocks during development.
+The GhostStock web app: a Spanish, mobile-first React SPA served by CloudFront on the
+same origin as the API. It must be functional end to end **and** visually exceptional
+(judging criterion). Identity, tokens and copy: `ui-identity.md`. Tests:
+`testing.md`. Owns `apps/web/**`, `e2e/web/**` and the Playwright workspace scaffold
+(`e2e/package.json`, `e2e/playwright.config.ts`).
 
 ## Requirements
 
-### EARS-1 — Upload screen
-WHEN the user opens the app (`/`),
-THE SYSTEM SHALL display a drag-and-drop zone with a camera icon and a file-picker
-trigger, accepting JPEG, PNG, and WEBP files up to 5 MB.
+### Requirement 1: Design system
 
-### EARS-2 — File validation feedback
-WHEN the user selects a file that exceeds 5 MB or has an unsupported type,
-THE SYSTEM SHALL display an inline error in Spanish before uploading.
+**User Story:** As a judge, I want the app to look premium and distinctive at first
+glance, so that GhostStock stands out.
 
-### EARS-3 — Upload and analyze flow
-WHEN the user selects a valid file,
-THE SYSTEM SHALL obtain a presigned POST URL, upload the file directly to S3,
-call `POST /api/analyze`, and navigate to `/revisar` with the candidates on success.
+#### Acceptance Criteria
 
-### EARS-4 — Analysis progress state
-WHILE the analysis is in flight,
-THE SYSTEM SHALL display a progress indicator and disable the upload trigger.
+1. THE web app SHALL define every color, radius and font from `ui-identity.md` as CSS
+   variables in `tokens.css`, mapped to Tailwind and shadcn/ui, with no raw hex values
+   in component files.
+2. THE web app SHALL self-host Fraunces, Geist and Geist Mono and use tabular numerals
+   for money and counts.
+3. THE web app SHALL render the grain overlay, violet glows and fog layer described in
+   `ui-identity.md` on every screen.
 
-### EARS-5 — Analysis error state
-WHEN the API returns an error (`NO_CANDIDATES`, `ANALYSIS_FAILED`, `THROTTLED`, etc.),
-THE SYSTEM SHALL display the corresponding Spanish error message and a retry button.
+### Requirement 2: Navigation shell
 
-### EARS-6 — Review candidates screen
-WHEN the user arrives at `/revisar`,
-THE SYSTEM SHALL display up to 5 product candidate cards, each showing name,
-category badge, estimated price (labeled "Precio estimado"), and quantity.
+**User Story:** As a phone user, I want to move between screens with my thumb.
 
-### EARS-7 — Inline editing of candidates
-WHEN the user edits a candidate field (name, description, price, quantity),
-THE SYSTEM SHALL update the local state immediately without a round-trip to the API.
+#### Acceptance Criteria
 
-### EARS-8 — Save selected candidates
-WHEN the user selects at least one candidate and presses "Guardar seleccionados",
-THE SYSTEM SHALL call `POST /api/items`, show a success toast, and navigate to
-`/inventario`.
+1. THE web app SHALL show a bottom tab bar on viewports under 768 px and a left
+   sidebar on wider viewports, with Almacén, Invocar, Inventario and Ajustes.
+2. WHEN the user presses Ctrl+K or Cmd+K, THE web app SHALL open a command palette
+   that searches products by name, brand, SKU and category and navigates to screens.
 
-### EARS-9 — Inventory dashboard
-WHEN the user opens `/inventario`,
-THE SYSTEM SHALL display: a stat row (total items, total estimated value, top
-category), a searchable and sortable item list/grid, category filter chips, and an
-"Exportar CSV" button.
+### Requirement 3: The ritual (photo selection)
 
-### EARS-10 — Dashboard empty state
-WHEN the inventory has zero items,
-THE SYSTEM SHALL display an illustration and the message
-"Aún no tienes productos. ¡Empieza subiendo una foto!" with a link to `/`.
+**User Story:** As the user, I want to take or pick a photo easily on any device.
 
-### EARS-11 — Search and filter
-WHEN the user types in the search box or selects a category chip,
-THE SYSTEM SHALL filter the displayed items client-side by name/description and
-category without a new API call (items already loaded).
+#### Acceptance Criteria
 
-### EARS-12 — CSV export
-WHEN the user presses "Exportar CSV",
-THE SYSTEM SHALL trigger a download of the CSV returned by `GET /api/items/export`.
+1. THE `/invocar` screen SHALL show the summoning-circle drop zone, accept drag and
+   drop and file picking, and on phones offer a camera button
+   (`capture="environment"`).
+2. IF the file is not JPEG, PNG or WebP, or is over 5 MB, THEN THE web app SHALL show
+   an inline Spanish error and SHALL NOT upload.
+3. WHEN a valid file is chosen, THE web app SHALL downscale it in the browser to at
+   most 1568 px on the long edge, re-encode it as JPEG (quality 0.85) unless it is
+   already smaller, and show a preview.
 
-### EARS-13 — Item detail and edit
-WHEN the user opens `/inventario/:id`,
-THE SYSTEM SHALL display the full item form pre-filled with current values,
-save changes via `PUT /api/items/:id`, and allow deletion via `DELETE /api/items/:id`
-with a confirmation dialog.
+### Requirement 4: Upload and resurrection (analysis)
 
-### EARS-14 — Four explicit UI states
-EVERY screen SHALL implement loading, empty, error, and success states.
-No state is implicit or silently missing.
+**User Story:** As the user, I want to see my products being "resurrected" while the
+AI works, so that the wait feels intentional.
 
-### EARS-15 — Reduced motion
-EVERY animation SHALL be disabled or simplified when
-`prefers-reduced-motion: reduce` is detected.
+#### Acceptance Criteria
 
-### EARS-16 — Accessibility
-THE SYSTEM SHALL meet WCAG 2.1 AA for all interactive components: visible focus
-rings, sufficient contrast, ARIA labels where native semantics are insufficient,
-keyboard operability.
+1. WHEN the user confirms the photo, THE web app SHALL request an upload slot, POST
+   the file to S3 with the returned fields, then call `POST /api/analyses`.
+2. WHILE the upload or analysis is in flight, THE web app SHALL show the resurrection
+   screen (photo frame, scan line, fog, rotating status copy every 1.8 s) and announce
+   the status through an `aria-live="polite"` region.
+3. IF any step fails, THEN THE web app SHALL show the Spanish message for the error
+   code (or a network message), keep the photo, and offer "Reintentar" and
+   "Elegir otra foto".
+4. WHEN the analysis returns zero candidates, THE web app SHALL show the
+   zero-detections state with its copy and the same two actions, never an error toast.
 
-### EARS-17 — MSW development mocks
-WHEN running in development mode (`import.meta.env.DEV`),
-THE SYSTEM SHALL activate MSW service-worker handlers that serve responses built
-from the `@ghoststock/contracts` fixtures, so development does not require a live API.
+### Requirement 5: Review candidates
 
-### EARS-18 — No English user-visible strings
-ALL user-visible text SHALL be in Spanish. No English strings SHALL appear in the UI.
+**User Story:** As the user, I want to correct what the AI saw and add what only I
+know, so that the saved inventory is right.
+
+#### Acceptance Criteria
+
+1. WHEN candidates arrive, THE web app SHALL animate them rising from the photo
+   (staggered spring, ectoplasm glow) with the heading "Los productos han vuelto a la
+   vida."
+2. EACH candidate card SHALL show the photo crop area, an editable name, a category
+   select, an editable description, the brand if any, a confidence chip (alta, media,
+   baja) with the model notes, and empty inputs for cantidad, precio unitario (COP)
+   and SKU.
+3. THE web app SHALL let the user discard a candidate, restore it, and select or
+   deselect it for saving.
+4. THE "Guardar seleccionados" action SHALL stay disabled until at least one selected
+   candidate has a valid name, category, quantity and unit price.
+5. THE web app SHALL NOT prefill quantity, price or SKU.
+
+### Requirement 6: Save
+
+**User Story:** As the user, I want saving to feel like the warehouse waking up.
+
+#### Acceptance Criteria
+
+1. WHEN the user saves, THE web app SHALL call `POST /api/products` with the selected
+   reviewed products and the `imageKey`.
+2. WHEN saving succeeds, THE web app SHALL show the toast "Tu almacén ha despertado.",
+   refresh the product data and navigate to `/`, where the KPIs count up.
+3. IF saving fails, THEN THE web app SHALL keep every edit and show the error with a
+   retry action.
+
+### Requirement 7: Dashboard (Almacén)
+
+**User Story:** As the owner, I want to understand my inventory at a glance.
+
+#### Acceptance Criteria
+
+1. THE `/` screen SHALL show KPI cards for productos, unidades, valor del inventario
+   (COP) and categorías, computed with `computeInventoryStats`.
+2. THE `/` screen SHALL show value by category, the category distribution, the
+   low-stock list (quantity at or under the configured threshold, in ember) and the
+   most recent products with photos.
+3. WHEN the inventory is empty, THE `/` screen SHALL show the ghost empty state with
+   "Invocar inventario".
+
+### Requirement 8: Inventory list
+
+**User Story:** As the owner, I want to find, edit and remove products quickly.
+
+#### Acceptance Criteria
+
+1. THE `/inventario` screen SHALL list products as a table on wide viewports and as
+   cards on phones, each with photo, name, category, quantity, unit price, total value
+   and a low-stock badge when applicable.
+2. WHEN the user types in search or picks category chips, THE list SHALL filter on the
+   client by name, description, brand and SKU, and by category, without API calls.
+3. WHEN the user edits a product, THE web app SHALL open a drawer with the product
+   form, save with `PUT /api/products/{id}`, and update the list optimistically with
+   rollback on error.
+4. WHEN the user deletes a product, THE web app SHALL ask for confirmation and then
+   call `DELETE /api/products/{id}`.
+5. WHEN the user presses "Exportar CSV", THE web app SHALL download
+   `ghoststock-inventario-<YYYY-MM-DD>.csv` built with `productsToCsv` from the
+   currently filtered list.
+
+### Requirement 9: Settings
+
+**User Story:** As the owner, I want to set my low-stock threshold.
+
+#### Acceptance Criteria
+
+1. THE `/ajustes` screen SHALL load and save `lowStockThreshold` and the dashboard and
+   inventory SHALL use the saved value.
+
+### Requirement 10: States, language and accessibility
+
+**User Story:** As any user, I want every screen to be clear, in Spanish and usable
+without a mouse.
+
+#### Acceptance Criteria
+
+1. EVERY data screen SHALL implement loading (skeletons), empty, error (with retry)
+   and success states.
+2. THE web app SHALL contain no English user-visible text; all copy lives in
+   `src/copy/es.ts`.
+3. WHEN `prefers-reduced-motion: reduce` is set, THE web app SHALL replace every
+   animation with an instant fade and stop all loops.
+4. THE web app SHALL have no serious or critical axe violations on any screen and SHALL
+   allow the full upload, review and save path by keyboard.
+
+### Requirement 11: Mocks and tests
+
+**User Story:** As the web builder, I want to work without the backend and prove every
+criterion.
+
+#### Acceptance Criteria
+
+1. WHEN running in development, THE web app SHALL serve the API through MSW handlers
+   built from contract fixtures, with scenarios selected by `?scenario=` (`happy`,
+   `empty`, `zero-candidates`, `model-error`, `throttled`, `network-error`).
+2. THE production build SHALL NOT include MSW.
+3. THE `e2e/web` Playwright projects SHALL cover Requirements 3 to 10 on desktop and
+   phone viewports, including axe checks and reduced motion.
+4. THE `visual` Playwright project SHALL keep screenshot baselines of every screen and
+   state for local review.

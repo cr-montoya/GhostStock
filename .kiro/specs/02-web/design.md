@@ -1,159 +1,152 @@
-# Design: 02-web
+# Design Document: 02-web
 
-## Package structure
+## Overview
+
+React 19 SPA built with Vite, Tailwind CSS 4, shadcn/ui (Radix), `motion`
+(`motion/react`), TanStack Query and React Router. Same-origin API at `/api`, images
+at `/<mediaKey>`. Identity is normative in `ui-identity.md`; this design says where
+each piece lives. Majors are the current stable ones at scaffold time, pinned by the
+lockfile.
+
+## Structure
 
 ```
 apps/web/
-├── public/
-│   └── mockServiceWorker.js      # MSW service worker (generated, gitignored)
-├── src/
-│   ├── api/
-│   │   ├── client.ts             # fetch wrapper, base URL /api
-│   │   ├── analyze.ts            # getUploadUrl(), uploadToS3(), analyzePhoto()
-│   │   └── items.ts              # saveItems(), listItems(), getItem(), updateItem(), deleteItem(), exportCsv()
-│   ├── components/
-│   │   ├── ui/                   # shadcn/ui generated components (do not edit manually)
-│   │   ├── UploadZone.tsx
-│   │   ├── CandidateCard.tsx
-│   │   ├── InventoryTable.tsx
-│   │   ├── StatRow.tsx
-│   │   ├── CategoryChips.tsx
-│   │   ├── ItemForm.tsx
-│   │   ├── ConfirmDialog.tsx
-│   │   └── ErrorMessage.tsx
-│   ├── pages/
-│   │   ├── UploadPage.tsx        # route /
-│   │   ├── ReviewPage.tsx        # route /revisar
-│   │   ├── InventoryPage.tsx     # route /inventario
-│   │   └── ItemDetailPage.tsx    # route /inventario/:id
-│   ├── mocks/
-│   │   ├── browser.ts            # MSW browser setup
-│   │   └── handlers.ts           # MSW handlers from contracts fixtures
-│   ├── styles/
-│   │   └── tokens.css            # CSS custom properties (design tokens)
-│   ├── lib/
-│   │   └── utils.ts              # cn() helper (shadcn pattern)
-│   ├── App.tsx                   # router setup (React Router v6)
-│   └── main.tsx                  # entry point, MSW bootstrap
-├── index.html
-├── vite.config.ts
-├── tailwind.config.ts
-├── tsconfig.json
-└── package.json
+  index.html
+  src/
+    main.tsx              bootstraps MSW in DEV only (dynamic import), then renders
+    app/
+      router.tsx          routes: / , /invocar, /inventario, /ajustes, * (404)
+      providers.tsx       QueryClient, Toaster, TooltipProvider, MotionConfig
+      shell/              AppShell, Sidebar, TabBar, CommandPalette
+    copy/es.ts            every user-visible string and error-code messages
+    styles/
+      tokens.css          CSS variables from ui-identity.md
+      globals.css         Tailwind layers, fonts, grain, glows, fog
+    api/
+      client.ts           apiFetch<T>(path, init, schema): parses with zod; throws ApiClientError
+      uploads.ts          createUpload(), postToS3()
+      analyses.ts         createAnalysis()
+      products.ts         list, create, update, remove
+      settings.ts         get, update
+      queries.ts          TanStack Query keys and hooks
+    features/
+      ritual/             DropZone, CameraButton, resizeImage.ts
+      resurrection/       ResurrectionStage, ScanLine, Fog, StatusTicker
+      review/             CandidateCard, ConfidenceChip, ReviewToolbar, useReview.ts
+      dashboard/          KpiCard, CountUp, ValueByCategoryChart, CategoryDonut,
+                          LowStockList, RecentGrid
+      inventory/          InventoryTable, InventoryCards, Filters, ProductDrawer,
+                          DeleteDialog, exportCsv.ts
+      settings/           ThresholdForm
+    components/
+      ui/                 shadcn generated (button, input, select, sheet, dialog,
+                          command, badge, card, skeleton, chart, tooltip, sonner)
+      brand/              Logo, GhostEmptyState (inline SVG), GrainOverlay, Glow
+      ProductPhoto.tsx    dark frame, object-cover, ghost glyph fallback
+    lib/                  cn(), formatCop(), formatNumber(), downloadText()
+    mocks/
+      handlers.ts         MSW handlers from @ghoststock/contracts fixtures
+      scenarios.ts        scenario switch from ?scenario=
+      browser.ts
+  vite.config.ts          dev server on 5173
+  components.json         shadcn config
+e2e/                      Playwright workspace (scaffold owned by this spec)
+  package.json, playwright.config.ts, fixtures/images/, web/*.spec.ts, visual/*.spec.ts
 ```
 
-## Routing
+## Flow state machine (`/invocar`)
 
-React Router v6 (`createBrowserRouter`):
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> preview: valid file
+  idle --> idle: invalid file (inline error)
+  preview --> uploading: confirmar
+  uploading --> analyzing: S3 204
+  analyzing --> review: candidates > 0
+  analyzing --> zeroDetections: candidates = 0
+  uploading --> failed
+  analyzing --> failed
+  failed --> uploading: reintentar
+  zeroDetections --> idle: otra foto
+  failed --> idle: otra foto
+  review --> saving: guardar
+  saving --> [*]: success -> navigate("/")
+  saving --> review: error (edits kept)
+```
 
-| Path | Component | Title (Spanish) |
-| --- | --- | --- |
-| `/` | `UploadPage` | GhostStock |
-| `/revisar` | `ReviewPage` | Revisar productos |
-| `/inventario` | `InventoryPage` | Mi inventario |
-| `/inventario/:id` | `ItemDetailPage` | Detalle del producto |
+Implemented with `useReducer` in `features/ritual/useInvocation.ts`; the photo blob
+and `imageKey` live in the reducer so retries never re-pick the file.
 
-Navigation state: candidates from the analyze call are passed via router `state`
-(`{ candidates, photoKey }`) from `UploadPage` to `ReviewPage`. If `ReviewPage` is
-accessed without state, it redirects to `/`.
+## Image resize
+
+`resizeImage(file)`: `createImageBitmap` (with `imageOrientation: "from-image"`),
+scale so the long edge is at most 1568 px, draw on `OffscreenCanvas` (fallback
+`canvas`), `convertToBlob({ type: "image/jpeg", quality: 0.85 })`. Keep the original
+if it is already smaller and under 1.5 MB.
 
 ## API client
 
-`src/api/client.ts` wraps `fetch`. All calls go to `/api/*` (same origin in
-production; Vite proxy to `http://localhost:3000` in dev).
+- `apiFetch` sends JSON, parses success bodies with the passed schema and error bodies
+  with `ApiErrorSchema`; network failures become `ApiClientError("NETWORK")`.
+- Error copy: `copy.errors[code]`, plus `copy.errors.NETWORK`.
+- Query keys: `["products"]`, `["settings"]`. Mutations invalidate `["products"]`;
+  update uses optimistic cache update with rollback.
 
-```typescript
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T>
-// throws ApiError (with .code: ErrorCode) on non-2xx
-```
+## Motion
 
-## State management
+- `MotionConfig reducedMotion="user"` at the root plus `useReducedMotion()` for loops
+  (scan line, fog, breathing circle) so they stop entirely.
+- Variants in `features/*/motion.ts`: `rise` (spring stiffness 260, damping 24,
+  stagger 0.08, from `y: 24, filter: blur(8px), opacity: 0`), `fadeIn` (250 ms),
+  `glowOnce` (ectoplasm shadow pulse 600 ms), count-up via `animate()` on a motion
+  value, 900 ms.
+- Page transitions: `AnimatePresence` with fade and 8 px rise, 250 ms.
 
-No external state library. React `useState` and `useReducer` per page. The inventory
-list is fetched fresh on `/inventario` mount. Search/filter is applied client-side
-with `useMemo`.
+## Visual details
 
-## Key component behaviors
+- Dashboard hero: Fraunces 40 to 56 px "Tu almacén", tagline in muted, violet radial
+  glow top-left, KPI cards in a 2x2 grid on phones and 4 columns on desktop.
+- Charts: horizontal bars for value by category (violet soft), donut for distribution,
+  tooltips styled as glass cards, COP formatting.
+- Low stock rows: ember left border, "Quedan N" in Geist Mono.
+- Inventory table: sticky header, row hover in `--surface-raised`, thumbnails 40 px
+  with rounded 8 px frame; cards on phones with photo on top.
+- Empty states: `GhostEmptyState` (drifting ghost SVG over shelves, 6 s float loop,
+  static under reduced motion).
 
-### `UploadZone`
-- Drag-and-drop via HTML5 drag events + `<input type="file" accept="image/jpeg,image/png,image/webp">`.
-- Client-side validation: size ≤ 5 MB, type in allowed list.
-- Shows thumbnail preview via `URL.createObjectURL`.
-- States: idle, dragging, uploading (progress bar), error.
+## MSW
 
-### `CandidateCard`
-- Displays one `ProductCandidate`.
-- Checkbox for selection (controlled by parent).
-- Inline edit: clicking name, description, price, or quantity opens an `<input>` /
-  `<textarea>` in place; `onBlur` commits to local state.
-- Category badge uses a color map (one Tailwind class per category, defined in a
-  `CATEGORY_COLORS` constant).
-- "Precio estimado" label is always shown next to the price.
+Handlers for every endpoint return contract fixtures. `scenarios.ts` reads
+`?scenario=` once and stores it in `sessionStorage` so navigation keeps it.
+Scenario `happy` simulates 2.5 s analysis latency so the resurrection is visible.
+`postToS3` is intercepted (any `*.amazonaws.com` POST returns 204).
 
-### `InventoryTable`
-- Responsive: card grid on mobile, table on `md+`.
-- Columns: nombre, categoría, precio estimado, cantidad, acciones.
-- Sort by name or createdAt (ascending/descending toggle).
-- Row actions: edit (→ `/inventario/:id`), delete (opens `ConfirmDialog`).
+## Playwright (ADR 0009)
 
-### `StatRow`
-- Derives stats from the loaded items array: `total`, `totalValue` (sum of
-  `estimatedPrice × quantity`), `topCategory` (most frequent).
-- Formatted numbers use `Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' })`.
+`e2e/playwright.config.ts` defines all projects from day one so 01 and 03 only add
+spec files:
 
-## Motion spec
+| Project | testDir | use |
+| --- | --- | --- |
+| `web-desktop` | `web` | `baseURL http://localhost:5173`, 1440x900 |
+| `web-mobile` | `web` | Pixel 7 device |
+| `visual` | `visual` | 1440x900 and Pixel 7, `toHaveScreenshot` |
+| `api` | `api` | `baseURL process.env.BASE_URL` |
+| `smoke` | `smoke` | `baseURL process.env.BASE_URL` |
 
-All animations use `motion` from `framer-motion` and respect `useReducedMotion()`.
+`webServer` starts `npm run dev -w @ghoststock/web` only for `web-*` and `visual`.
+Specs: `ritual.spec.ts`, `resurrection.spec.ts`, `review.spec.ts`,
+`dashboard.spec.ts`, `inventory.spec.ts`, `settings.spec.ts`, `a11y.spec.ts`,
+`motion.spec.ts`. Test titles carry the criterion id, e.g. `[02 4.4]`.
 
-```typescript
-const reducedMotion = useReducedMotion();
-const transition = reducedMotion ? { duration: 0 } : { duration: 0.25 };
-```
+## Dependencies
 
-| Interaction | Animation |
-| --- | --- |
-| Page mount | `opacity: 0→1`, `y: 16→0`, 400 ms |
-| Candidate card entry | Staggered `opacity: 0→1`, 60 ms stagger |
-| Upload success checkmark | Scale 0→1, 250 ms spring |
-| Toast | Slide in from bottom-right, 250 ms; auto-dismiss 4 s |
-
-## MSW handlers
-
-`src/mocks/handlers.ts` covers:
-- `GET /api/upload-url` → `{ url, fields, key }` (fake S3 endpoint, no real upload)
-- `POST /api/analyze` → `{ candidates: [sampleCandidate, ...] }` from fixtures
-- `POST /api/items` → `{ saved: [sampleItem] }`
-- `GET /api/items` → `{ items: [sampleItem], total: 1 }`
-- `GET /api/items/:id` → `sampleItem` or 404
-- `PUT /api/items/:id` → updated item
-- `DELETE /api/items/:id` → 204
-- `GET /api/items/export` → minimal CSV blob
-
-## Package configuration
-
-```json
-{
-  "name": "@ghoststock/web",
-  "dependencies": {
-    "@ghoststock/contracts": "*",
-    "react": "18.3.x",
-    "react-dom": "18.3.x",
-    "react-router-dom": "6.x",
-    "framer-motion": "11.x"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "4.x",
-    "vite": "5.x",
-    "tailwindcss": "3.x",
-    "msw": "2.x",
-    "vitest": "2.1.8",
-    "@testing-library/react": "16.x",
-    "@testing-library/user-event": "14.x",
-    "jsdom": "25.x",
-    "typescript": "5.6.3"
-  }
-}
-```
-
-shadcn/ui components are installed via CLI (`npx shadcn@latest add ...`) and live in
-`src/components/ui/`. They are not listed as npm dependencies.
+Runtime: `react`, `react-dom`, `react-router`, `@tanstack/react-query`, `motion`,
+`sonner`, `cmdk`, `recharts`, Radix packages pulled by shadcn, `lucide-react`,
+`clsx`, `tailwind-merge`, `class-variance-authority`, `@fontsource-variable/fraunces`,
+`@fontsource-variable/geist`, `@fontsource-variable/geist-mono`,
+`@ghoststock/contracts`. Dev: `vite`, `@vitejs/plugin-react`, `tailwindcss`,
+`@tailwindcss/vite`, `msw`, `vitest`, `@testing-library/react`, `typescript`.
+e2e workspace: `@playwright/test`, `@axe-core/playwright`, `@ghoststock/contracts`.
