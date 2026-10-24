@@ -31,7 +31,8 @@ apps/web/
       settings.ts         get, update
       queries.ts          TanStack Query keys and hooks
     features/
-      ritual/             DropZone, CameraButton, resizeImage.ts
+      ritual/             InvokePage, DropZone (file and camera inputs), SummoningCircle,
+                          invocationReducer.ts, resizeImage.ts
       resurrection/       ResurrectionStage, ScanLine, Fog, StatusTicker
       review/             CandidateCard, ConfidenceChip, ReviewToolbar, useReview.ts
       dashboard/          KpiCard, CountUp, ValueByCategoryChart, CategoryDonut,
@@ -71,7 +72,9 @@ stateDiagram-v2
   analyzing --> zeroDetections: candidates = 0
   uploading --> failed
   analyzing --> failed
-  failed --> uploading: reintentar
+  failed --> uploading: reintentar (no imageKey yet, or IMAGE_NOT_FOUND)
+  failed --> analyzing: reintentar (photo already in S3)
+  zeroDetections --> analyzing: reintentar
   zeroDetections --> idle: otra foto
   failed --> idle: otra foto
   review --> saving: guardar
@@ -79,8 +82,12 @@ stateDiagram-v2
   saving --> review: error (edits kept)
 ```
 
-Implemented with `useReducer` in `features/ritual/useInvocation.ts`; the photo blob
-and `imageKey` live in the reducer so retries never re-pick the file.
+Implemented with `useReducer` (`features/ritual/invocationReducer.ts`, pure and unit
+tested) driven by `features/ritual/InvokePage.tsx`; the photo blob and `imageKey` live in
+the reducer so retries never re-pick the file, and an expired photo (`IMAGE_NOT_FOUND`)
+is uploaded again. Stale uploads, analyses and picks are ignored by run counters. Each
+step change moves focus to its main control (or the hidden stage heading while
+analyzing), never on first load.
 
 ## Image resize
 
