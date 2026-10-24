@@ -32,12 +32,12 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - `api/*`, query hooks, MSW handlers and scenarios from contract fixtures.
   - _Requirements: 11.1_
 
-- [ ] 5. Ritual
+- [x] 5. Ritual
   - `DropZone`, `CameraButton`, `resizeImage`, validation errors.
   - Playwright: invalid type, oversize, preview shown (`setInputFiles`).
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 6. Resurrection
+- [x] 6. Resurrection
   - `ResurrectionStage`, `ScanLine`, `Fog`, `StatusTicker`, failure and zero states.
   - Playwright: status region announces, `model-error`, `throttled`,
     `network-error`, `zero-candidates` scenarios with retry.
