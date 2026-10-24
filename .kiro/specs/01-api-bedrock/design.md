@@ -115,9 +115,12 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
    no time left -> `MODEL_THROTTLED` without calling Bedrock. A retry happens only if
    the backoff fits in the time left. The Bedrock client uses region `us-east-1`.
 4. Retry policy and error mapping exactly as `ai-integration.md`. `ValidationException`
-   by message, checked in this order: `/model|access/i` -> `MODEL_UNAVAILABLE`;
+   by message, checked in this order:
    `/image|format|dimension|decode|could not process/i` -> `UNSUPPORTED_MEDIA_TYPE`
-   (the photo is the problem, the UI asks for another); otherwise `INTERNAL_ERROR`.
+   (the photo is the problem, the UI asks for another); then `/model|access/i` ->
+   `MODEL_UNAVAILABLE`; otherwise `INTERNAL_ERROR`. The image rule goes first because
+   Amazon Nova (ADR 0012) prefixes image errors with "The model returned the following
+   errors"; model-access messages carry no image words.
    Any other unlisted Bedrock exception -> `INTERNAL_ERROR`. The Bedrock message is
    logged (capped, `describeCause`), never image bytes.
 5. `stopReason` must be `tool_use`; the first `toolUse` block named `report_products`
