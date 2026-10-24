@@ -1,6 +1,6 @@
 import {
   CreateProductsRequestSchema,
-  SettingsSchema,
+  UpdateSettingsRequestSchema,
   UpdateProductRequestSchema,
   analysisFixture,
   apiErrorFixtures,
@@ -84,8 +84,10 @@ export const handlers = [
       createdAt: now,
       updatedAt: now,
     }));
-    db.products = [...created.slice().reverse(), ...products()];
-    return HttpResponse.json({ products: created }, { status: 201 });
+    // Newest first, like GET /api/products and the docs/api.md example.
+    const newestFirst = created.slice().reverse();
+    db.products = [...newestFirst, ...products()];
+    return HttpResponse.json({ products: newestFirst }, { status: 201 });
   }),
 
   http.put("/api/products/:id", async ({ params, request }) => {
@@ -117,7 +119,7 @@ export const handlers = [
   }),
 
   http.put("/api/settings", async ({ request }) => {
-    const parsed = SettingsSchema.safeParse(await request.json());
+    const parsed = UpdateSettingsRequestSchema.safeParse(await request.json());
     if (!parsed.success) return apiError("VALIDATION_ERROR", 400);
     await delay(300);
     if (currentScenario() === "mutation-error") return apiError("STORAGE_ERROR", 500);

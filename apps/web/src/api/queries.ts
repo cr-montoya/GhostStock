@@ -1,4 +1,4 @@
-import type { CreateProductsRequest, Product, Settings, UpdateProductRequest } from "@ghoststock/contracts";
+import type { CreateProductsRequest, Product, UpdateProductRequest, UpdateSettingsRequest } from "@ghoststock/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createProducts, deleteProduct, listProducts, updateProduct } from "./products";
 import { getSettings, updateSettings } from "./settings";
@@ -45,6 +45,8 @@ export function useUpdateProduct() {
         list?.map((product) => (product.id === updated.id ? updated : product)),
       );
     },
+    // Re-sync with the server either way, so a rollback never hides a concurrent edit.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.products }),
   });
 }
 
@@ -55,13 +57,14 @@ export function useDeleteProduct() {
     onSuccess: (_result, id) => {
       queryClient.setQueryData<Product[]>(queryKeys.products, (list) => list?.filter((p) => p.id !== id));
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.products }),
   });
 }
 
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: Settings) => updateSettings(settings),
+    mutationFn: (settings: UpdateSettingsRequest) => updateSettings(settings),
     onSuccess: (saved) => queryClient.setQueryData(queryKeys.settings, saved),
   });
 }
