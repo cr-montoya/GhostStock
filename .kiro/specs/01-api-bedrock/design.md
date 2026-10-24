@@ -18,21 +18,23 @@ services/api/
       inventory.ts      /api/products, /api/products/{id}, /api/settings (routeKey switch)
     services/
       uploads.ts        createUploadSlot()
-      analyses.ts       analyzeImage()
+      analyses.ts       analyzeImage(), readToolOutput()
       products.ts       createProducts(), listProducts(), getProduct(),
                         updateProduct(), deleteProduct()
       settings.ts       getSettings(), updateSettings()
     adapters/
-      s3.ts             headImage(), getImageBytes(), copyToMedia(), presignPost()
+      s3.ts             headImage(), getImageBytes(), mediaKeyFor(), copyToMedia(),
+                        presignPost()
       dynamo.ts         keys, document client, toItem(), fromItem(), error helpers
-      bedrock.ts        converseWithTool() with retry and timeout
+      bedrock.ts        createBedrockClient(), converseWithTool() with retry and
+                        deadline, mapBedrockError()
     bedrock/
       prompt.ts         SYSTEM_PROMPT, USER_PROMPT
       tool.ts           REPORT_PRODUCTS_TOOL built from ModelOutputJsonSchema
     lib/
-      http.ts           parseJson(), json(), noContent(), withErrors() wrapper
+      http.ts           parseJson(), validate(), json(), noContent(), withErrors()
       errors.ts         AppError(code, message, cause?)
-      env.ts            zod-validated process.env
+      env.ts            zod-validated process.env per function (envLoader)
       observability.ts  Powertools logger and metrics
       ids.ts            ulid()
   test/                 Vitest unit tests
