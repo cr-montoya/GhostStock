@@ -5,7 +5,7 @@ Evaluators: `qa-engineer`, `code-reviewer`, `security-reviewer`. Requires 00 mer
 The commit that creates `services/api/package.json` carries
 `ADR-EXEMPT: dependencies recorded in ADR 0010`.
 
-- [ ] 1. Scaffold the workspace (critical path, merge first)
+- [x] 1. Scaffold the workspace (critical path, merge first)
   - `package.json`, `tsconfig.json`, Vitest config, dependencies from ADR 0010.
   - Handler files `uploads.ts`, `analyses.ts`, `inventory.ts` wired through
     `withErrors`, returning `500 INTERNAL_ERROR` ("not implemented") until their task
