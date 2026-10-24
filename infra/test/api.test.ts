@@ -45,7 +45,7 @@ const actions = (s: Statement[]) => s.flatMap((x) => [x.Action].flat()).sort();
 describe("functions", () => {
   it.each([
     ["uploads", 256, 10, undefined],
-    ["analyses", 1024, 28, 5],
+    ["analyses", 1024, 28, undefined],
     ["inventory", 256, 10, undefined],
   ])("[03-infra-pipeline 5.1] %s runs Node.js 22 arm64 with its limits", (name, memory, timeout, reserved) => {
     const props = fn(name);

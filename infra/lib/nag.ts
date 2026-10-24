@@ -38,7 +38,7 @@ export function suppressAppStackFindings(stack: Stack, t: AppStackNagTargets): v
     {
       id: "AwsSolutions-APIG4",
       reason:
-        "Single-workspace demo without users by product decision; stage throttling, reserved concurrency and the budget bound abuse.",
+        "Single-workspace demo without users by product decision; stage throttling and the budget bound abuse.",
     },
   ]);
   suppress(t.distribution, [
