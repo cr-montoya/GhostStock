@@ -33,7 +33,8 @@ valid, honest outcome, never an error disguised as success or a fabricated resul
 
 1. Opens the app on the dashboard ("Tu almacén"). Empty warehouse -> ghost empty
    state with one call to action: "Invocar inventario".
-2. Takes or uploads a photo (JPEG, PNG, WebP, up to 5 MB). The browser downscales it.
+2. Takes or uploads a photo (JPEG, PNG or WebP, any size up to 25 MB). The browser downscales it below
+   the 3.75 MB Bedrock image limit.
 3. Resurrection screen while Bedrock analyzes ("Invocando tu inventario...").
 4. Candidates rise as editable cards ("Los productos han vuelto a la vida.").
 5. User removes false detections, edits names and categories, enters quantity, unit

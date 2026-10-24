@@ -23,7 +23,7 @@ Decision record: ADR 0007 (`docs/adr/0007-bedrock-structured-output-and-honest-a
 ```
 POST /api/analyses { imageKey }
   -> zod parse, imageKey regex check
-  -> S3 HeadObject (size <= 5 MB, content type allowed) then GetObject bytes
+  -> S3 HeadObject (size <= 3.75 MB, content type allowed) then GetObject bytes
      (Converse needs bytes; it does not accept URLs)
   -> ConverseCommand
        system: SYSTEM_PROMPT
@@ -67,9 +67,11 @@ return them.
    the zero-detections state.
 2. **Untrusted output.** A missing tool call, wrong tool name, `stopReason` other than
    `tool_use`, or a zod failure -> `502 MODEL_INVALID_OUTPUT`. No partial salvage.
-3. **Bounded calls.** One Converse call per request. Retry only
-   `ThrottlingException` / `ServiceUnavailableException`, 2 retries, 400 ms and 1200 ms.
-   Then `503 MODEL_THROTTLED` (`retryable: true`).
+3. **Bounded calls.** One successful Converse call per request. Client
+   `maxAttempts: 1`; our own retry only on `ThrottlingException` /
+   `ServiceUnavailableException`, 2 retries (400 ms, 1200 ms), all inside one 25 s
+   deadline. `ModelTimeoutException` or the deadline -> no retry. Then
+   `503 MODEL_THROTTLED` (`retryable: true`).
 4. **Access failures are explicit.** `AccessDeniedException`,
    `ResourceNotFoundException`, `ValidationException` about the model ->
    `503 MODEL_UNAVAILABLE` (`retryable: false`), logged with the model id.
