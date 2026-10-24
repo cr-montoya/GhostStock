@@ -1,64 +1,63 @@
-# Tasks: 03-infra-pipeline
+# Implementation Plan: 03-infra-pipeline
 
-## Implementation tasks
+Branch: `feat/03-<slug>` per slice, worktree `../GhostStock-infra`. Builder:
+`infra-dev`. Evaluators: `code-reviewer`, `security-reviewer`. Requires 00 merged;
+synth also needs the handler stubs from 01 task 1 and the web scaffold from 02 task 1
+(critical path, see `docs/sdd-workflow.md`). `cdk deploy` only with the owner's
+go-ahead.
 
-- [ ] 1. Scaffold `infra` workspace
-  - [ ] 1.1 Create `infra/package.json` with dependencies from design.md
-  - [ ] 1.2 Create `infra/tsconfig.json` (strict, CommonJS for CDK compatibility)
-  - [ ] 1.3 Create `infra/cdk.json` with `app: "npx ts-node bin/ghoststock.ts"` and context keys: `account`, `region`, `connectionArn`, `repoOwner`, `repoName`, `branch`, `alarmEmail` (placeholder values, never real secrets)
-  - [ ] 1.4 Add `infra` to the root workspaces array
+- [ ] 1. Scaffold the infra workspace
+  - `package.json` (aws-cdk-lib, constructs, cdk-nag, esbuild, aws-cdk, vitest),
+    `cdk.json` with non-sensitive context, `bin/ghoststock.ts`, `lib/config.ts`.
+  - Commit carries `ADR-EXEMPT: infra dependencies recorded in ADR 0008`.
+  - Tests: invalid config fails synth with a clear message.
+  - _Requirements: 1.1, 1.2_
 
-- [ ] 2. Reusable constructs
-  - [ ] 2.1 `lib/constructs/secure-bucket.ts` — `SecureBucket` with Block Public Access, S3-managed encryption, enforce SSL
-  - [ ] 2.2 `lib/constructs/ghost-function.ts` — `GhostFunction` with Node 22, esbuild bundler, log retention, environment pass-through
+- [ ] 2. Pipeline stack
+  - `pipeline-stack.ts`, `app-stage.ts`; pick and pin the Node.js 22 CodeBuild image.
+  - Tests: selfMutation, source, synth commands and env, primary output, no test
+    steps by default, pre and post steps when `enableTests`.
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3_
 
-- [ ] 3. Storage stack (`lib/stacks/storage-stack.ts`)
-  - [ ] 3.1 Upload bucket using `SecureBucket` with lifecycle rule (1-day expiry on `uploads/`)
-  - [ ] 3.2 SPA bucket using `SecureBucket`
-  - [ ] 3.3 Expose both buckets as stack outputs
+- [ ] 3. Storage and data
+  - `MediaBucket`, web bucket, table.
+  - Tests: hardening, lifecycle, CORS, keys, PITR.
+  - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 4. Data stack (`lib/stacks/data-stack.ts`)
-  - [ ] 4.1 DynamoDB table with on-demand billing, AWS-managed encryption, PITR
-  - [ ] 4.2 `CategoryCreatedAtIndex` GSI
-  - [ ] 4.3 Expose table as stack output
+- [ ] 4. Functions and HTTP API
+  - `ApiFunction`, three functions, explicit IAM, HTTP API routes, throttling, access
+    logs.
+  - Tests: per-function settings and exact policies; routes; no CORS.
+  - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 5. API stack (`lib/stacks/api-stack.ts`)
-  - [ ] 5.1 Create all five Lambda functions using `GhostFunction` with correct handler entry points
-  - [ ] 5.2 Inject `TABLE_NAME`, `UPLOAD_BUCKET`, `BEDROCK_MODEL_ID` environment variables
-  - [ ] 5.3 Apply per-function IAM grants per design.md (scoped policies, not broad grants)
-  - [ ] 5.4 Set `analyzeHandler` tracing to `ACTIVE` and reserved concurrency to 5
-  - [ ] 5.5 Create HTTP API with all 8 routes from design.md
-  - [ ] 5.6 Apply throttling: burst 10, rate 5
-  - [ ] 5.7 Configure CORS to allow CloudFront distribution domain only
+- [ ] 5. Frontend and distribution
+  - `Frontend` construct: web bucket deployment, spa rewrite function, headers
+    policy with CSP, behaviors `/api/*` and `/media/*`, `BaseUrl` output.
+  - Tests: behaviors, OAC, function association, headers, invalidation, no error
+    responses.
+  - _Requirements: 6.1, 6.2, 6.3, 7.1, 7.2_
 
-- [ ] 6. CDN stack (`lib/stacks/cdn-stack.ts`)
-  - [ ] 6.1 Build `ResponseHeadersPolicy` with all security headers from security.md; CSP uses actual resource domain values
-  - [ ] 6.2 Create CloudFront distribution with OAC for SPA bucket, `/api/*` behavior for HTTP API, HTTPS-only, TLS 1.2 minimum
-  - [ ] 6.3 Deploy SPA build artifact (`apps/web/dist`) to SPA bucket via `BucketDeployment` and invalidate distribution
+- [ ] 6. Budget and cdk-nag
+  - `CfnBudget` when email is present; `nag.ts` suppressions with reasons.
+  - Tests: budget conditional; zero unsuppressed nag errors.
+  - _Requirements: 8.1, 9.1, 9.2, 9.3_
 
-- [ ] 7. Monitoring stack (`lib/stacks/monitoring-stack.ts`)
-  - [ ] 7.1 SNS topic with email subscription from `alarmEmail` context
-  - [ ] 7.2 CloudWatch billing alarm at $20 USD on `AWS/Billing` `EstimatedCharges`
+- [ ] 7. Deployment documentation
+  - `docs/deployment.md` and `docs/architecture.md` per Requirement 11.
+  - _Requirements: 11.1, 11.2_
 
-- [ ] 8. App stage and pipeline stack
-  - [ ] 8.1 `lib/app-stage.ts` — instantiate all five stacks with correct dependency order
-  - [ ] 8.2 `lib/pipeline-stack.ts` — self-mutating pipeline with CodeConnections source, `npm ci && npx cdk synth` synth step, `Prod` stage
-  - [ ] 8.3 `bin/ghoststock.ts` — CDK app entry point with `AwsSolutionsChecks` aspect
+- [ ] 8. First deployment (owner go-ahead required)
+  - Owner runs bootstrap, connection authorization and
+    `npx cdk deploy GhostStockPipeline -c connectionArn=... -c budgetEmail=...`.
+  - Done when the pipeline is green and `BaseUrl` serves the app.
+  - _Requirements: 2.1, 2.4, 7.2_
 
-- [ ] 9. cdk-nag suppressions
-  - [ ] 9.1 Add `NagSuppressions.addResourceSuppressions` for all expected findings with written reason strings (demo removal policy, billing metric in us-east-1, etc.)
+- [ ] 9. Smoke tests and enable gates
+  - `e2e/smoke/*.spec.ts` per Requirement 10.2; green against `BaseUrl`.
+  - When the MVP works end to end: PR setting `enableTests: true`; verify the
+    pipeline mutates and adds both steps.
+  - _Requirements: 3.2, 10.2_
 
-- [ ] 10. Assertion tests
-  - [ ] 10.1 `test/storage.test.ts` — S3 Block Public Access on both buckets, lifecycle rule on upload bucket
-  - [ ] 10.2 `test/data.test.ts` — DynamoDB encryption, PITR, GSI presence
-  - [ ] 10.3 `test/api.test.ts` — Lambda runtime `nodejs22.x`, environment variable keys present, throttling settings
-  - [ ] 10.4 `test/cdn.test.ts` — HTTPS-only viewer protocol, minimum TLS version, OAC present
-  - [ ] 10.5 `test/pipeline.test.ts` — pipeline stack synthesizes without error
-
-- [ ] 11. Deployment documentation
-  - [ ] 11.1 Create `docs/deployment.md` with step-by-step instructions: bootstrap, CodeConnections authorization, Bedrock model access, first pipeline run
-
-- [ ] 12. Build and verify
-  - [ ] 12.1 `npm run build` in `infra` exits 0 with no TypeScript errors
-  - [ ] 12.2 `npx cdk synth` exits 0 with no cdk-nag errors (unsuppressed findings)
-  - [ ] 12.3 `npm test` in `infra` exits 0 with all assertion tests passing
+- [ ] 10. Verify and sync
+  - `npm test -w @ghoststock/infra`, `npx cdk synth`, `spec-sync`.
+  - _Requirements: 10.1, 10.3_

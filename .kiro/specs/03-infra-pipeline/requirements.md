@@ -1,85 +1,160 @@
-# Requirements: 03-infra-pipeline
+# Requirements Document: 03-infra-pipeline
 
-## Overview
+## Introduction
 
-AWS CDK v2 TypeScript stack defining all cloud resources and a self-mutating CDK
-Pipeline that deploys every merge to `main`. No manual console changes are acceptable
-as a solution; manual one-time steps are documented in `docs/deployment.md`.
+All GhostStock cloud resources and the self-mutating CDK Pipeline that deploys every
+merge to `main`, in AWS CDK v2 TypeScript. Rules: `infra-cdk.md`, `security.md`.
+Decisions: ADR 0006 (single origin), ADR 0008 (one AppStack + pipeline). Owns
+`infra/**`, `e2e/smoke/**`, `docs/deployment.md`, `docs/architecture.md`.
 
 ## Requirements
 
-### EARS-1 — Self-mutating CDK Pipeline
-THE SYSTEM SHALL define a self-mutating CDK Pipeline (CodePipeline + CodeBuild) that
-triggers on every push to `main` of the connected GitHub repository, updates itself
-first (UpdatePipeline stage), then deploys the application stage.
+### Requirement 1: Configuration
 
-### EARS-2 — GitHub source connection
-THE SYSTEM SHALL use a CodeConnections (formerly CodeStar Connections) connection ARN
-(supplied via `cdk.json` context) to connect to the GitHub repository.
-The one-time connection authorization step SHALL be documented in `docs/deployment.md`.
+**User Story:** As the operator, I want deploy settings validated and secrets kept out
+of git.
 
-### EARS-3 — Application stage resources
-THE SYSTEM SHALL provision in a single application stage:
-S3 upload bucket, S3 SPA bucket, CloudFront distribution (HTTPS only, OAC,
-security headers), API Gateway HTTP API, Lambda functions (analyze, items-write,
-items-read, presign, export), DynamoDB table with GSI, Bedrock model access grant.
+#### Acceptance Criteria
 
-### EARS-4 — CloudFront configuration
-THE SYSTEM SHALL configure CloudFront with:
-HTTPS-only (HTTP → HTTPS redirect), minimum TLS 1.2, OAC for the SPA bucket,
-a response headers policy including HSTS, X-Content-Type-Options, X-Frame-Options
-DENY, Referrer-Policy, and a restrictive CSP with actual bucket and API domain values.
+1. THE CDK app SHALL read context `region`, `repo`, `branch`, `bedrockModelId`,
+   `lowStockDefault`, `enableTests`, `budgetUsd`, `connectionArn` and `budgetEmail`
+   and validate them with `InfraConfigSchema`; synth SHALL fail with a clear message
+   on invalid values.
+2. `infra/cdk.json` SHALL NOT contain `connectionArn`, `budgetEmail` or an account id.
 
-### EARS-5 — Lambda configuration
-THE SYSTEM SHALL deploy each Lambda with:
-`nodejs22.x` runtime, `NodejsFunction` with esbuild bundler (no Docker),
-per-function IAM roles scoped to exact actions and resources as specified in
-`security.md`, memory and timeout values per `security.md`, X-Ray tracing active
-for `analyzeHandler`.
+### Requirement 2: Self-mutating pipeline
 
-### EARS-6 — DynamoDB table
-THE SYSTEM SHALL create the `GhostStockItems` table with:
-on-demand billing, encryption at rest (AWS-managed key), point-in-time recovery
-enabled, and the `CategoryCreatedAtIndex` GSI (PK = `category`, SK = `createdAt`).
+**User Story:** As the team, I want every merge to `main` to build, update the pipeline
+and deploy, so that `main` is always what runs.
 
-### EARS-7 — S3 bucket security
-THE SYSTEM SHALL configure both S3 buckets with Block Public Access on all four
-settings. The upload bucket SHALL have a lifecycle rule deleting objects under
-`uploads/` after 1 day. The SPA bucket SHALL use OAC, not OAI or public ACLs.
+#### Acceptance Criteria
 
-### EARS-8 — API Gateway throttling
-THE SYSTEM SHALL configure default route throttling on the HTTP API at
-10 req/s burst, 5 req/s steady state.
+1. THE pipeline stack SHALL define `pipelines.CodePipeline` with `selfMutation: true`
+   and a CodeConnections GitHub source on `repo` and `branch`.
+2. THE synth step SHALL run `npm ci`, `npm run build` and `npx cdk synth` in `infra`
+   with `primaryOutputDirectory` `infra/cdk.out`, on a CodeBuild image with Node.js 22.
+3. THE pipeline SHALL persist `connectionArn` and `budgetEmail` as synth step
+   environment variables and pass them back as `-c` context, so later self-mutations
+   synthesize the same pipeline without manual input.
+4. THE pipeline SHALL deploy stage `Prod` containing `GhostStockAppStack`.
 
-### EARS-9 — CORS configuration
-THE SYSTEM SHALL configure CORS on the HTTP API to allow the CloudFront distribution
-domain only (no wildcard) in production.
+### Requirement 3: Optional test stages
 
-### EARS-10 — Environment variable injection
-THE SYSTEM SHALL inject `TABLE_NAME`, `UPLOAD_BUCKET`, and `BEDROCK_MODEL_ID`
-into each Lambda's environment via CDK, never hard-coded.
+**User Story:** As the owner, I want automated test gates that I can switch on once
+the MVP works.
 
-### EARS-11 — cdk-nag compliance
-THE SYSTEM SHALL run the `AwsSolutions` cdk-nag rule pack at synth time. All findings
-SHALL be fixed or suppressed with `NagSuppressions.addResourceSuppressions` and a
-written reason string.
+#### Acceptance Criteria
 
-### EARS-12 — Budget alarm
-THE SYSTEM SHALL create a CloudWatch billing alarm at $20 USD that sends a
-notification to an SNS topic with an owner email subscriber (email supplied via
-`cdk.json` context).
+1. WHILE `enableTests` is `false`, THE pipeline SHALL have no test steps.
+2. WHEN `enableTests` is `true`, THE `Prod` stage SHALL have a pre step running unit
+   tests and the Playwright `web-desktop` project (Chromium) and a post step running
+   the Playwright `smoke` project with `BASE_URL` from the stack output.
+3. IF any test step fails, THEN THE pipeline SHALL stop before or after deploy
+   accordingly and report the failure.
 
-### EARS-13 — CDK synth and assertion tests
-THE SYSTEM SHALL include CDK assertion tests that verify key resource properties
-(Lambda runtimes, DynamoDB encryption, S3 block public access, CloudFront HTTPS,
-cdk-nag passing) and pass on every `npm test` run.
+### Requirement 4: Storage
 
-### EARS-14 — No cdk deploy without explicit approval
-THE infra-dev agent SHALL NOT run `cdk deploy` or `cdk destroy` against an account
-without the owner's explicit go-ahead in the session. `cdk synth` and `cdk diff`
-are always permitted.
+**User Story:** As the security reviewer, I want private, encrypted storage with the
+right lifecycle.
 
-### EARS-15 — Deployment documentation
-THE SYSTEM SHALL maintain `docs/deployment.md` with step-by-step instructions for:
-CDK bootstrap, CodeConnections authorization, Bedrock model access enablement,
-and first pipeline run.
+#### Acceptance Criteria
+
+1. THE app stack SHALL create a web bucket and a media bucket with Block Public Access
+   (all four), SSE-S3, `enforceSSL`, and object ownership enforced.
+2. THE media bucket SHALL expire `tmp/` objects after 1 day, abort incomplete uploads
+   after 1 day, and allow CORS `POST` from any origin only.
+3. THE app stack SHALL create the DynamoDB table with string `PK` and `SK`,
+   on-demand billing, AWS-managed encryption and point-in-time recovery.
+
+### Requirement 5: Functions and API
+
+**User Story:** As the API lane, I want my handlers deployed with least privilege.
+
+#### Acceptance Criteria
+
+1. THE app stack SHALL create `uploads`, `analyses` and `inventory` functions with
+   `NodejsFunction` (Node.js 22, arm64, esbuild without Docker) from
+   `services/api/src/handlers/*.ts`, with the memory, timeout, reserved concurrency,
+   environment and explicit 14 day log groups from `security.md`.
+2. EACH function role SHALL contain only the actions and resources in the
+   `security.md` IAM table; Bedrock access SHALL cover the configured inference
+   profile ARN and the matching foundation model ARNs.
+3. THE app stack SHALL create an HTTP API with the routes of `architecture.md` plus a
+   `$default` route to the inventory function (JSON `NOT_FOUND` envelope), default
+   stage throttling (burst 10, rate 5), JSON access logs (14 days), and no
+   CORS configuration.
+
+### Requirement 6: CloudFront single origin
+
+**User Story:** As the user, I want one secure address for the app, the API and the
+photos.
+
+#### Acceptance Criteria
+
+1. THE app stack SHALL create one distribution with: default behavior to the web
+   bucket through OAC with a CloudFront Function rewriting extensionless paths to
+   `/index.html`; `/api/*` to the HTTP API with caching disabled, all methods, and all
+   viewer headers except Host; `/media/*` to the media bucket through OAC with caching
+   optimized.
+2. THE distribution SHALL redirect HTTP to HTTPS, require TLS 1.2 or later, enable
+   HTTP/2 and 3, and attach the response headers policy from `security.md`, with the
+   media bucket regional domain in `connect-src`.
+3. THE distribution SHALL NOT use distribution-wide custom error responses.
+
+### Requirement 7: Frontend publishing
+
+**User Story:** As the team, I want the web app published and the cache invalidated on
+every deploy.
+
+#### Acceptance Criteria
+
+1. THE app stack SHALL deploy `apps/web/dist` to the web bucket with
+   `BucketDeployment`, passing the distribution and `distributionPaths: ["/*"]`.
+2. THE app stack SHALL output `BaseUrl` (`https://<distribution domain>`).
+
+### Requirement 8: Cost guardrail
+
+**User Story:** As the owner, I want to know before the demo costs surprise me.
+
+#### Acceptance Criteria
+
+1. WHERE `budgetEmail` is provided, THE app stack SHALL create a monthly AWS Budgets
+   cost budget of `budgetUsd` with email notifications at 80% and 100% of actual cost.
+
+### Requirement 9: Compliance checks
+
+**User Story:** As the reviewer, I want automated well-architected checks at synth.
+
+#### Acceptance Criteria
+
+1. THE CDK app SHALL apply cdk-nag `AwsSolutionsChecks` to every stack.
+2. EVERY remaining finding SHALL be suppressed at resource level with a written reason.
+3. THE infra tests SHALL fail if any unsuppressed cdk-nag error exists.
+
+### Requirement 10: Tests and safety
+
+**User Story:** As the reviewer, I want infrastructure behavior proven before deploy.
+
+#### Acceptance Criteria
+
+1. THE infra workspace SHALL have Vitest tests with `aws-cdk-lib/assertions` for
+   Requirements 2 to 9, with asset bundling skipped in tests.
+2. THE `e2e/smoke` Playwright project SHALL verify, against `BASE_URL`: the dashboard
+   renders in Spanish, `/api/products` and `/api/settings` return contract-valid
+   bodies, an upload slot can be obtained, security headers are present, and an
+   unknown `/api` path returns the JSON `NOT_FOUND` envelope (not `index.html`).
+3. NO agent SHALL run `cdk deploy` or `cdk destroy` without the owner's explicit
+   go-ahead in the session.
+
+### Requirement 11: Living documentation
+
+**User Story:** As anyone deploying GhostStock, I want a reproducible first deployment.
+
+#### Acceptance Criteria
+
+1. `docs/deployment.md` SHALL describe, step by step: prerequisites, Bedrock model
+   access, `cdk bootstrap`, creating and authorizing the CodeConnections GitHub
+   connection, the first `cdk deploy` with context, finding `BaseUrl`, turning on
+   `enableTests`, and teardown.
+2. `docs/architecture.md` SHALL contain the runtime and pipeline diagrams (Mermaid)
+   and the AWS service responsibilities, consistent with the deployed stack.
