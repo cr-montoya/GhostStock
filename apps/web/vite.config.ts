@@ -22,10 +22,25 @@ function mswWorker(): Plugin {
   };
 }
 
+// Dev only: saved product photos (`/media/products/*`) resolve to a fixture photo.
+function devMedia(): Plugin {
+  const photo = fileURLToPath(new URL("../../e2e/fixtures/images/pantry.jpg", import.meta.url));
+  return {
+    name: "ghoststock:dev-media",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/media/products/", (_req, res) => {
+        res.setHeader("Content-Type", "image/jpeg");
+        createReadStream(photo).pipe(res);
+      });
+    },
+  };
+}
+
 const src = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), mswWorker()],
+  plugins: [react(), tailwindcss(), mswWorker(), devMedia()],
   resolve: {
     alias: {
       "@": src("./src"),
