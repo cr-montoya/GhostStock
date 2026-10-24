@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ApiErrorSchema, Ulid } from "@ghoststock/contracts";
+import { Ulid } from "@ghoststock/contracts";
 import { AnalysesEnvSchema, InventoryEnvSchema, UploadsEnvSchema, envLoader } from "../src/lib/env.js";
 import { AppError } from "../src/lib/errors.js";
 import { ulid } from "../src/lib/ids.js";
-import { handler as inventory } from "../src/handlers/inventory.js";
-import { apiEvent, lambdaContext } from "./helpers.js";
 
 describe("ulid", () => {
   it("produces contract ulids that sort in creation order", () => {
@@ -43,16 +41,5 @@ describe("envLoader", () => {
   it("rejects a negative low stock default", () => {
     const load = envLoader(InventoryEnvSchema, { MEDIA_BUCKET: "m", TABLE_NAME: "t", LOW_STOCK_DEFAULT: "-1" });
     expect(load).toThrow("LOW_STOCK_DEFAULT");
-  });
-});
-
-describe("handler entry points (task 1 stubs)", () => {
-  it.each([
-    ["inventory", inventory],
-  ])("%s answers 500 INTERNAL_ERROR in the envelope", async (_name, handler) => {
-    const res = await handler(apiEvent(), lambdaContext);
-    expect(res.statusCode).toBe(500);
-    const body = ApiErrorSchema.parse(JSON.parse(res.body as string));
-    expect(body.error).toMatchObject({ code: "INTERNAL_ERROR", message: "Not implemented" });
   });
 });
