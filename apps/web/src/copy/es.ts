@@ -102,6 +102,8 @@ export const copy = {
     description: "Una foto de tus productos basta. La IA propone, tú decides qué se guarda.",
     dropTitle: "Arrastra una foto al círculo",
     dropNow: "Suéltala para iniciar el ritual",
+    tapTitle: "Toca para elegir una foto",
+    processing: "Preparando la foto...",
     formats: "JPG, PNG o WebP, hasta 25 MB.",
     pick: "Elegir foto",
     fileInput: "Archivo de foto",
