@@ -68,7 +68,7 @@ CSV export and dashboard stats are computed in the browser from the product list
 
 | Spec | Owns | Unblocked by |
 | --- | --- | --- |
-| `00-contracts` | `packages/contracts/**` | nothing |
+| `00-contracts` | `packages/contracts/**`, `docs/api.md` | nothing |
 | `01-api-bedrock` | `services/api/**`, `e2e/api/**` | 00 merged |
 | `02-web` | `apps/web/**`, `e2e/web/**`, `e2e/visual/**`, `e2e/package.json`, `e2e/playwright.config.ts`, `e2e/fixtures/**`, `docs/demo.md` | 00 merged |
 | `03-infra-pipeline` | `infra/**`, `e2e/smoke/**`, `docs/deployment.md`, `docs/architecture.md` | 00 merged |
