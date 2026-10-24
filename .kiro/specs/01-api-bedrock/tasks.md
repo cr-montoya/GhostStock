@@ -47,9 +47,10 @@ The commit that creates `services/api/package.json` carries
   - `e2e/api/*.spec.ts` per Requirement 9, using the fixture photos committed by
     02 task 1 in `e2e/fixtures/images/` (read only from this lane).
   - Done when they pass against the first deployed stack (`BASE_URL`):
-    `BASE_URL=https://<distribution> pnpm --filter @ghoststock/e2e test:api`. `@bedrock`
-    tests call the real model. Specs run in order per file and retry only API Gateway
-    `429` (stage throttling). Created products are deleted; their photo under
+    `BASE_URL=https://<distribution> pnpm --filter @ghoststock/e2e test:api --workers=1`.
+    `@bedrock` tests call the real model. The project runs in series (one worker, specs
+    in order per file) because the stage throttling is a cost and security control; only
+    an API Gateway `429` is retried, at most 4 times with backoff. Created products are deleted; their photo under
     `media/products/` is kept by design, and `tmp/` uploads expire after 1 day.
   - _Requirements: 9.2, 9.3_
 
