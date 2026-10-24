@@ -35,7 +35,7 @@ export function ValueByCategoryChart({ data }: { data: CategoryStats[] }) {
     <figure aria-label={copy.dashboard.valueByCategory}>
       <div style={{ height }} aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 64, top: 0, bottom: 0 }} barCategoryGap={10}>
+          <BarChart accessibilityLayer={false} data={data} layout="vertical" margin={{ left: 0, right: 64, top: 0, bottom: 0 }} barCategoryGap={10}>
             <defs>
               <linearGradient id="gs-bar" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0" stopColor="var(--violet)" stopOpacity={0.55} />
@@ -89,7 +89,7 @@ export function CategoryDonut({ data, total }: { data: CategoryStats[]; total: n
     <figure aria-label={copy.dashboard.distribution} className="flex flex-col items-center gap-5 sm:flex-row">
       <div className="relative size-44 shrink-0" aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <PieChart accessibilityLayer={false}>
             <Pie
               data={data}
               dataKey="productCount"
@@ -97,6 +97,7 @@ export function CategoryDonut({ data, total }: { data: CategoryStats[]; total: n
               innerRadius="68%"
               outerRadius="100%"
               paddingAngle={3}
+              rootTabIndex={-1}
               stroke="var(--surface)"
               strokeWidth={2}
               isAnimationActive={!reduce}

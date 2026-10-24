@@ -106,7 +106,7 @@ export function InvokePage() {
       {
         onSuccess: () => {
           toast.success(copy.review.awakened, { description: copy.review.savedCount(products.length) });
-          void navigate("/");
+          void navigate("/", { state: { awakened: true } });
         },
       },
     );
@@ -191,6 +191,7 @@ export function InvokePage() {
 
           {state.step === "review" && (
             <ReviewStep
+              headingRef={focusOnMount}
               analysis={state.analysis}
               photoUrl={state.photo.previewUrl}
               saving={createProducts.isPending}

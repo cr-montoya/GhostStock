@@ -22,19 +22,19 @@ export function GhostEmptyState({ title, body, action, className, headingLevel =
         className,
       )}
     >
-      <div className="relative mb-6 h-40 w-64" aria-hidden="true">
+      <div className="relative mb-6 h-52 w-80" aria-hidden="true">
         <Shelves />
         <motion.div
-          className="absolute left-1/2 top-[88px] -ml-7 h-2 w-14 rounded-full bg-violet/40 blur-[5px]"
+          className="absolute left-1/2 top-[118px] -ml-9 h-2.5 w-18 rounded-full bg-violet/45 blur-[6px]"
           animate={reduce ? undefined : { scaleX: [1, 0.8, 1], opacity: [0.7, 0.4, 0.7] }}
           transition={reduce ? undefined : { duration: 6, ease: "easeInOut", repeat: Infinity }}
         />
         <motion.div
-          className="absolute left-1/2 top-0 -ml-10 drop-shadow-[0_0_28px_var(--violet-glow)]"
+          className="absolute left-1/2 top-0 -ml-14 drop-shadow-[0_0_36px_var(--violet-glow)]"
           animate={reduce ? undefined : { y: [0, -10, 0], rotate: [-2, 2, -2] }}
           transition={reduce ? undefined : { duration: 6, ease: "easeInOut", repeat: Infinity }}
         >
-          <GhostGlyph className="size-20" />
+          <GhostGlyph className="size-28" />
         </motion.div>
       </div>
       <Heading className="text-xl text-balance">{title}</Heading>

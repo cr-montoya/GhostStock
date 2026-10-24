@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./CountUp";
 
@@ -8,9 +9,12 @@ interface KpiCardProps {
   format: (value: number) => string;
   icon: LucideIcon;
   highlight?: boolean;
+  /** Pulse an ectoplasm glow once (after a save). */
+  awakened?: boolean;
 }
 
-export function KpiCard({ label, value, format, icon: Icon, highlight = false }: KpiCardProps) {
+export function KpiCard({ label, value, format, icon: Icon, highlight = false, awakened = false }: KpiCardProps) {
+  const reduce = useReducedMotion();
   return (
     <section
       aria-label={label}
@@ -19,6 +23,15 @@ export function KpiCard({ label, value, format, icon: Icon, highlight = false }:
         highlight && "border-violet-soft/30 shadow-[var(--shadow-soft),0_0_48px_-16px_var(--violet-glow)]",
       )}
     >
+      {awakened && !reduce && (
+        <motion.span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_0_1px_var(--ectoplasm-glow),0_0_40px_var(--ectoplasm-glow)]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 1.2, delay: 0.2, ease: "easeOut" }}
+        />
+      )}
       {highlight && (
         <div
           aria-hidden="true"

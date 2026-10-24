@@ -140,9 +140,9 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(60rem 40rem at -10% -10%, color-mix(in oklab, var(--violet) 22%, transparent), transparent 70%),
-    radial-gradient(40rem 30rem at 110% 0%, color-mix(in oklab, var(--violet-soft) 8%, transparent), transparent 70%),
-    radial-gradient(50rem 30rem at 90% 120%, color-mix(in oklab, var(--ectoplasm) 5%, transparent), transparent 70%);
+    radial-gradient(80rem 52rem at -10% -15%, color-mix(in oklab, var(--violet) 34%, transparent), transparent 70%),
+    radial-gradient(50rem 36rem at 110% 0%, color-mix(in oklab, var(--violet-soft) 14%, transparent), transparent 70%),
+    radial-gradient(56rem 34rem at 92% 118%, color-mix(in oklab, var(--ectoplasm) 9%, transparent), transparent 70%);
 }
 
 .gs-fog {
@@ -150,14 +150,14 @@
   left: -25%;
   right: -25%;
   bottom: -10%;
-  height: 55vh;
+  height: 45vh;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.9;
   background:
-    radial-gradient(40% 60% at 20% 80%, color-mix(in oklab, var(--violet-soft) 9%, transparent), transparent 70%),
-    radial-gradient(35% 55% at 60% 90%, color-mix(in oklab, var(--text) 5%, transparent), transparent 70%),
-    radial-gradient(30% 50% at 90% 85%, color-mix(in oklab, var(--violet) 10%, transparent), transparent 70%);
+    radial-gradient(40% 60% at 20% 80%, color-mix(in oklab, var(--violet-soft) 16%, transparent), transparent 70%),
+    radial-gradient(35% 55% at 60% 90%, color-mix(in oklab, var(--text) 8%, transparent), transparent 70%),
+    radial-gradient(30% 50% at 90% 85%, color-mix(in oklab, var(--violet) 16%, transparent), transparent 70%);
   filter: blur(20px);
   mask-image: linear-gradient(to top, black 35%, transparent);
   animation: gs-fog-drift 38s ease-in-out infinite alternate;

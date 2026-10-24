@@ -118,7 +118,7 @@ export function InventoryPage() {
     return (
       <>
         {header}
-        <div aria-busy="true" aria-label={copy.common.loading} className="glass rounded-xl p-4">
+        <div role="status" aria-busy="true" aria-label={copy.common.loading} className="glass rounded-xl p-4">
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="flex items-center gap-4 border-b border-border py-3 last:border-0">
               <Skeleton className="size-10 rounded-sm" />
