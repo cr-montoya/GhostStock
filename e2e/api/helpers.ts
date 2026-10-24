@@ -7,11 +7,54 @@ import {
   type ErrorCode,
   type ImageContentType,
 } from "@ghoststock/contracts";
-import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type APIResponse } from "@playwright/test";
 
-/** The api project targets a deployed stack; without BASE_URL there is nothing to test. */
-export function requireDeployedStack() {
+type RequestOptions = NonNullable<Parameters<APIRequestContext["fetch"]>[1]>;
+
+/**
+ * Calls to the deployed API. The stage is throttled (burst 10, rate 5, security.md), so a
+ * `429` from API Gateway is retried with backoff; it is not a contract response. Every
+ * other status is returned as is.
+ */
+export interface Api {
+  get(path: string, options?: RequestOptions): Promise<APIResponse>;
+  post(path: string, options?: RequestOptions): Promise<APIResponse>;
+  put(path: string, options?: RequestOptions): Promise<APIResponse>;
+  delete(path: string, options?: RequestOptions): Promise<APIResponse>;
+}
+
+const THROTTLE_BACKOFF_MS = [500, 1000, 2000, 4000] as const;
+
+function apiFor(request: APIRequestContext): Api {
+  const send = async (method: string, path: string, options: RequestOptions = {}) => {
+    for (let attempt = 0; ; attempt++) {
+      const response = await request.fetch(path, { ...options, method });
+      const backoff = THROTTLE_BACKOFF_MS[attempt];
+      if (response.status() !== 429 || backoff === undefined) return response;
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
+  };
+  return {
+    get: (path, options) => send("GET", path, options),
+    post: (path, options) => send("POST", path, options),
+    put: (path, options) => send("PUT", path, options),
+    delete: (path, options) => send("DELETE", path, options),
+  };
+}
+
+export const test = base.extend<{ api: Api }>({
+  api: async ({ request }, use) => {
+    await use(apiFor(request));
+  },
+});
+
+/**
+ * The api project targets a deployed stack; without BASE_URL there is nothing to test.
+ * Tests in a file run in order on one worker to stay under the stage throttling.
+ */
+export function setupApiSpec() {
   test.skip(!process.env.BASE_URL, "BASE_URL of a deployed stack is required (project api)");
+  test.describe.configure({ mode: "default" });
 }
 
 export function fixtureImage(name: string): Buffer {
@@ -28,12 +71,8 @@ export async function expectApiError(response: APIResponse, status: number, code
   return body;
 }
 
-export async function createUpload(
-  request: APIRequestContext,
-  contentType: ImageContentType,
-  sizeBytes: number,
-): Promise<CreateUploadResponse> {
-  const response = await request.post("/api/uploads", { data: { contentType, sizeBytes } });
+export async function createUpload(api: Api, contentType: ImageContentType, sizeBytes: number): Promise<CreateUploadResponse> {
+  const response = await api.post("/api/uploads", { data: { contentType, sizeBytes } });
   expect(response.status()).toBe(201);
   expect(response.headers()["cache-control"]).toContain("no-store");
   return CreateUploadResponseSchema.parse(await response.json());
@@ -46,11 +85,15 @@ export async function postToS3(request: APIRequestContext, slot: CreateUploadRes
   });
 }
 
-/** Uploads a fixture photo and returns its `tmp/` key. */
-export async function uploadFixture(request: APIRequestContext, name: string): Promise<string> {
-  const file = fixtureImage(name);
-  const slot = await createUpload(request, "image/jpeg", file.byteLength);
+/** Uploads bytes as a jpeg through a fresh slot and returns the `tmp/` key. */
+export async function uploadBytes(api: Api, request: APIRequestContext, file: Buffer): Promise<string> {
+  const slot = await createUpload(api, "image/jpeg", file.byteLength);
   const s3 = await postToS3(request, slot, file, "image/jpeg");
   expect(s3.status()).toBe(204);
   return slot.imageKey;
+}
+
+/** Uploads a fixture photo and returns its `tmp/` key. */
+export async function uploadFixture(api: Api, request: APIRequestContext, name: string): Promise<string> {
+  return uploadBytes(api, request, fixtureImage(name));
 }
