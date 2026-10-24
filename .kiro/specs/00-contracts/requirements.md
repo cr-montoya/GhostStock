@@ -178,5 +178,5 @@ a typo fails fast instead of deploying something wrong.
    on any other workspace.
 2. THE package SHALL compile with `strict: true`, emit ESM plus declarations to
    `dist/`, and contain no `any`.
-3. WHEN `npm run build -w @ghoststock/contracts` and
-   `npm test -w @ghoststock/contracts` run, THEY SHALL exit 0.
+3. WHEN `pnpm --filter @ghoststock/contracts build` and
+   `pnpm --filter @ghoststock/contracts test` run, THEY SHALL exit 0.

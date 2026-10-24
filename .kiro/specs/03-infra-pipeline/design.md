@@ -33,7 +33,7 @@ infra/
 ```mermaid
 flowchart LR
   GH[GitHub main] --> SRC[Source: CodeConnections]
-  SRC --> SY[Synth: npm ci, npm run build, cdk synth]
+  SRC --> SY[Synth: pnpm install, pnpm build, cdk synth]
   SY --> UP[UpdatePipeline: self-mutation]
   UP --> AS[Assets: publish Lambda zips and web assets]
   AS --> PRE{enableTests?}
@@ -56,9 +56,10 @@ const synth = new pipelines.ShellStep("Synth", {
   input: source,
   env: { CONNECTION_ARN: connectionArn, BUDGET_EMAIL: cfg.budgetEmail ?? "" },
   commands: [
-    "npm ci",
-    "npm run build",
-    "cd infra && npx cdk synth -c connectionArn=$CONNECTION_ARN -c budgetEmail=$BUDGET_EMAIL",
+    "corepack enable",
+    "pnpm install --frozen-lockfile",
+    "pnpm build",
+    "cd infra && pnpm exec cdk synth -c connectionArn=$CONNECTION_ARN -c budgetEmail=$BUDGET_EMAIL",
   ],
   primaryOutputDirectory: "infra/cdk.out",
 });
@@ -71,25 +72,28 @@ const pipeline = new pipelines.CodePipeline(this, "Pipeline", {
 const prod = new GhostStockAppStage(this, "Prod", { env, config: cfg });
 pipeline.addStage(prod, cfg.enableTests ? {
   pre: [new pipelines.ShellStep("Test", { input: source, commands: [
-    "npm ci", "npm run build", "npm test",
-    "npx playwright install --with-deps chromium",
-    "npm run test:web -w @ghoststock/e2e -- --project=web-desktop",
+    "corepack enable", "pnpm install --frozen-lockfile", "pnpm build", "pnpm test",
+    "pnpm --filter @ghoststock/e2e exec playwright install --with-deps chromium",
+    "pnpm --filter @ghoststock/e2e test:web --project=web-desktop",
   ]})],
   post: [new pipelines.ShellStep("Smoke", {
     input: source,
     envFromCfnOutputs: { BASE_URL: prod.baseUrl },
-    commands: ["npm ci", "npm run build -w @ghoststock/contracts",
-               "npx playwright install --with-deps chromium",
-               "npm run test:smoke -w @ghoststock/e2e"],
+    commands: ["corepack enable", "pnpm install --frozen-lockfile",
+               "pnpm --filter @ghoststock/contracts build",
+               "pnpm --filter @ghoststock/e2e exec playwright install --with-deps chromium",
+               "pnpm --filter @ghoststock/e2e test:smoke"],
   })],
 } : undefined);
 ```
 
 `NODE22_IMAGE`: the managed CodeBuild image whose runtime list includes Node.js 22,
 selected and pinned in task 2 (verified against the CodeBuild docs, not assumed).
+Every step starts with `corepack enable` (bundled with Node.js 22) so the exact pnpm
+version from the root `packageManager` field is used; npm is never invoked.
 `connectionArn` is used only by the pipeline stack; the app stage never reads it.
 Every ShellStep gets `input: source` explicitly: the synth output only contains
-`infra/cdk.out`, and the test steps need the whole repository. `npm run build` runs
+`infra/cdk.out`, and the test steps need the whole repository. `pnpm build` runs
 before tests because contracts export `dist/` and `BucketDeployment` needs
 `apps/web/dist`.
 
@@ -111,7 +115,7 @@ before tests because contracts export `dist/` and `BucketDeployment` needs
 `bundling { minify: true, sourceMap: true, target: "node22", format: OutputFormat.ESM,
 mainFields: ["module", "main"], externalModules: [], banner: "import { createRequire }
 from 'module'; const require = createRequire(import.meta.url);" }`, `projectRoot` repo
-root, `depsLockFilePath` root `package-lock.json`, explicit `LogGroup` (14 days,
+root, `depsLockFilePath` root `pnpm-lock.yaml`, explicit `LogGroup` (14 days,
 DESTROY), Powertools env. `externalModules: []` bundles our pinned SDK clients
 (including `@aws-sdk/s3-presigned-post`, which the runtime does not ship) instead of
 relying on the runtime's SDK; the banner lets CommonJS dependencies `require` inside

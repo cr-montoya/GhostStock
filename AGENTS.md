@@ -63,6 +63,9 @@ phone, deployed API, smoke, accessibility, visual); Vitest covers pure units. Ru
    go-ahead in the session. `cdk synth` and `cdk diff` are always fine.
 7. **Never fabricate AI results.** Invalid or empty model output is an explicit state.
 8. **Minimum necessary change.** No unrequested refactors.
+9. **pnpm only** ([ADR 0011](docs/adr/0011-pnpm-workspaces.md)). Never run `npm`, `npx`
+   or `yarn`: use `pnpm install`, `pnpm --filter <pkg> <script>`, `pnpm exec <bin>`,
+   `pnpm dlx <pkg>`. Internal dependencies use `workspace:*`.
 
 ## Agents
 

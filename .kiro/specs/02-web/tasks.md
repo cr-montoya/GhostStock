@@ -8,7 +8,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - Vite React TS app, Tailwind 4, shadcn init, router, providers, MSW bootstrap.
   - `e2e/` workspace with `playwright.config.ts` (all five projects, `webServer` only
     when `BASE_URL` is unset), scripts `test:web`, `test:visual`, `test:api`,
-    `test:smoke` and **no** `test` script (so root `npm test` never runs deployed
+    `test:smoke` and **no** `test` script (so root `pnpm test` never runs deployed
     projects), and one passing spec on the empty shell; add `e2e` to the root
     `workspaces` list.
   - Commit the fixture photos `e2e/fixtures/images/` (3 small license-free product
@@ -71,6 +71,6 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - _Requirements: 10.1, 10.3, 10.4, 11.3, 11.4_
 
 - [ ] 12. Verify and sync
-  - `npm run build -w @ghoststock/web` (no MSW in bundle), web e2e green on both
+  - `pnpm --filter @ghoststock/web build` (no MSW in bundle), web e2e green on both
     viewports, `spec-sync`, `docs/demo.md` first draft.
   - _Requirements: 11.2, 11.3_

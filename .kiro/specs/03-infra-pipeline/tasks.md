@@ -48,7 +48,7 @@ go-ahead.
 
 - [ ] 8. First deployment (owner go-ahead required)
   - Owner runs bootstrap, connection authorization and
-    `npx cdk deploy GhostStockPipeline -c connectionArn=... -c budgetEmail=...`.
+    `pnpm exec cdk deploy GhostStockPipeline -c connectionArn=... -c budgetEmail=...`.
   - Done when the pipeline is green and `BaseUrl` serves the app.
   - _Requirements: 2.1, 2.4, 7.2_
 
@@ -59,5 +59,5 @@ go-ahead.
   - _Requirements: 3.2, 10.2_
 
 - [ ] 10. Verify and sync
-  - `npm test -w @ghoststock/infra`, `npx cdk synth`, `spec-sync`.
+  - `pnpm --filter @ghoststock/infra test`, `pnpm exec cdk synth`, `spec-sync`.
   - _Requirements: 10.1, 10.3_

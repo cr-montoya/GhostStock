@@ -6,7 +6,7 @@ Branch: `feat/00-contracts`. Builder: main session or `api-dev`. Evaluators:
 - [ ] 1. Scaffold the workspace
   - Create `packages/contracts/package.json`, `tsconfig.json`, `src/index.ts`,
     Vitest config; install `zod@4`, `typescript`, `vitest`; commit the lockfile.
-  - Done when `npm run build -w @ghoststock/contracts` exits 0 on an empty barrel.
+  - Done when `pnpm --filter @ghoststock/contracts build` exits 0 on an empty barrel.
   - _Requirements: 11.1, 11.2_
 
 - [ ] 2. Common primitives
@@ -49,7 +49,7 @@ Branch: `feat/00-contracts`. Builder: main session or `api-dev`. Evaluators:
   - _Requirements: 9.1, 9.2_
 
 - [ ] 9. Verify and document
-  - `npm run build`, `npm test`, `npm run typecheck` in the workspace, all green.
+  - `pnpm build`, `pnpm test`, `pnpm typecheck` in the workspace, all green.
   - Create `docs/api.md` with every endpoint and its example payloads taken from the
     fixtures; link it from `docs/README.md`.
   - _Requirements: 11.3_

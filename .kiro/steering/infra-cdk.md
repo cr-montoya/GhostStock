@@ -30,7 +30,7 @@ validated at synth time with `InfraConfigSchema` from `@ghoststock/contracts`.
 
 - `NodejsFunction`, `nodejs22.x`, arm64, esbuild as a local devDependency (no Docker),
   minify, source maps, `projectRoot` = repo root, `depsLockFilePath` = root
-  `package-lock.json`, entries in `services/api/src/handlers/*.ts`.
+  `pnpm-lock.yaml`, entries in `services/api/src/handlers/*.ts`.
 - Explicit `LogGroup` per function with 14 day retention (not the deprecated
   `logRetention` prop).
 
@@ -38,7 +38,7 @@ validated at synth time with `InfraConfigSchema` from `@ghoststock/contracts`.
 
 - `pipelines.CodePipeline`, `selfMutation: true`, source
   `CodePipelineSource.connection(repo, branch, { connectionArn })`.
-- Synth: `npm ci`, `npm run build` (contracts, api, web), then `cd infra && npx cdk
+- Synth: `corepack enable`, `pnpm install --frozen-lockfile`, `pnpm build` (contracts, api, web), then `cd infra && pnpm exec cdk
   synth`; `primaryOutputDirectory: "infra/cdk.out"`. The web build must exist before
   synth because `BucketDeployment` packages `apps/web/dist`.
 - CodeBuild image must provide Node.js 22.
@@ -47,5 +47,5 @@ validated at synth time with `InfraConfigSchema` from `@ghoststock/contracts`.
 
 ## Commands
 
-- Always allowed: `npx cdk synth`, `npx cdk diff`, tests.
+- Always allowed: `pnpm exec cdk synth`, `pnpm exec cdk diff`, tests.
 - `cdk deploy` and `cdk destroy` only with the owner's explicit go-ahead in session.

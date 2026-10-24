@@ -50,7 +50,7 @@ The commit that creates `services/api/package.json` carries
   - _Requirements: 9.2, 9.3_
 
 - [ ] 8. Verify and sync
-  - `npm test -w @ghoststock/api`, typecheck, `npm audit --omit=dev`.
+  - `pnpm --filter @ghoststock/api test`, typecheck, `pnpm audit --prod`.
   - `spec-sync`: tick tasks, reconcile design. `docs/api.md` belongs to the contracts
     lane: if behavior moved, open a small 00-contracts PR instead of editing it here.
   - _Requirements: 9.1_
