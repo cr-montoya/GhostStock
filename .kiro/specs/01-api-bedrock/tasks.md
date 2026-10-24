@@ -54,7 +54,7 @@ The commit that creates `services/api/package.json` carries
     `media/products/` is kept by design, and `tmp/` uploads expire after 1 day.
   - _Requirements: 9.2, 9.3_
 
-- [ ] 8. Verify and sync
+- [x] 8. Verify and sync
   - `pnpm --filter @ghoststock/api test`, typecheck, `pnpm audit --prod`.
   - `spec-sync`: tick tasks, reconcile design. `docs/api.md` belongs to the contracts
     lane: if behavior moved, open a small 00-contracts PR instead of editing it here.
