@@ -23,7 +23,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - Vitest guard: no hex color literal under `apps/web/src` outside `tokens.css`.
   - _Requirements: 1.1, 1.2, 1.3, 10.2_
 
-- [ ] 3. Shell and command palette
+- [x] 3. Shell and command palette
   - `AppShell`, `Sidebar`, `TabBar`, `CommandPalette`, 404 page.
   - Playwright: navigation on both viewports, Ctrl+K search.
   - _Requirements: 2.1, 2.2_
