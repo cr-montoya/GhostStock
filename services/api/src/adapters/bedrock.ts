@@ -100,7 +100,8 @@ export async function converseWithTool(deps: ConverseDeps, image: ConverseImage)
 
 /**
  * Maps a Bedrock SDK exception to the contract error code (ai-integration.md, req 3.4).
- * A ValidationException about the model or access is checked before the image rule.
+ * A ValidationException about the image is checked before the model rule: some models
+ * (Amazon Nova) word image errors as "The model returned the following errors: ...".
  * Any other one is INTERNAL_ERROR; its Bedrock message is logged, never image bytes.
  */
 export function mapBedrockError(error: unknown): AppError {
@@ -109,11 +110,11 @@ export function mapBedrockError(error: unknown): AppError {
   if (RETRYABLE.has(name) || name === "ModelTimeoutException" || name === "AbortError") {
     return new AppError("MODEL_THROTTLED", undefined, error);
   }
-  if (UNAVAILABLE.has(name) || (name === "ValidationException" && /model|access/i.test(message))) {
-    return new AppError("MODEL_UNAVAILABLE", undefined, error);
-  }
   if (name === "ValidationException" && IMAGE_PROBLEM.test(message)) {
     return new AppError("UNSUPPORTED_MEDIA_TYPE", "Image could not be processed", error);
+  }
+  if (UNAVAILABLE.has(name) || (name === "ValidationException" && /model|access/i.test(message))) {
+    return new AppError("MODEL_UNAVAILABLE", undefined, error);
   }
   return new AppError("INTERNAL_ERROR", undefined, error);
 }
