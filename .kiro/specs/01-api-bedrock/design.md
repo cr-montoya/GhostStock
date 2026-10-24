@@ -24,7 +24,7 @@ services/api/
       settings.ts       getSettings(), updateSettings()
     adapters/
       s3.ts             headImage(), getImageBytes(), copyToMedia(), presignPost()
-      dynamo.ts         keys, toItem(), fromItem(), query/put/update/delete helpers
+      dynamo.ts         keys, document client, toItem(), fromItem(), error helpers
       bedrock.ts        converseWithTool() with retry and timeout
     bedrock/
       prompt.ts         SYSTEM_PROMPT, USER_PROMPT
@@ -135,13 +135,19 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
 
 - List: `Query PK = :ws AND begins_with(SK, "PRODUCT#")`, `ScanIndexForward: false`
   (ULIDs sort by time), follow `LastEvaluatedKey` up to 1 000 items.
-- Create: `BatchWriteItem` (max 10 items, retry unprocessed items up to 3 times; any
-  leftover -> `STORAGE_ERROR`).
+- Create: `CopyObject` once (`NoSuchKey` -> `IMAGE_NOT_FOUND`, nothing written; other
+  failures -> `STORAGE_ERROR`), then `BatchWriteItem` (max 10 items, retry unprocessed
+  items up to 3 times after 100, 200 and 400 ms; any leftover or exception ->
+  `STORAGE_ERROR`, after a best-effort batch delete of the new ids so no partial set
+  stays visible). The copied photo is kept.
 - Update: `UpdateItem` with `ConditionExpression attribute_exists(PK)`, expression
   built from the validated partial with placeholders, `ReturnValues: ALL_NEW`.
 - Delete: `DeleteItem` with the same condition. `ConditionalCheckFailedException` ->
   `NOT_FOUND`.
-- `fromItem` strips `PK`, `SK`, `entity` and parses with `ProductSchema`.
+- `fromItem` strips `PK`, `SK`, `entity` and parses with `ProductSchema`. Any other
+  DynamoDB failure (list, get, update, delete, settings) -> `STORAGE_ERROR`.
+- Settings: `GetItem` on `SETTINGS`, missing -> `LOW_STOCK_DEFAULT`; `PutItem` stores
+  `lowStockThreshold` and `updatedAt`.
 - The shared photo is not deleted with a product (other products may use it).
 
 ## Environment
