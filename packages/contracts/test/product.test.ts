@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateProductsRequestSchema,
+  MAX_QUANTITY,
+  MAX_UNIT_PRICE_COP,
   ProductFieldsSchema,
   ProductSchema,
+  ReviewedProductSchema,
   UpdateProductRequestSchema,
 } from "../src/schemas/product.js";
 import { SettingsSchema } from "../src/schemas/settings.js";
-import { classifyUploadRequestError, CreateUploadRequestSchema } from "../src/schemas/upload.js";
+import {
+  classifyUploadRequestError,
+  CreateUploadRequestSchema,
+  CreateUploadResponseSchema,
+} from "../src/schemas/upload.js";
 import { MAX_UPLOAD_BYTES } from "../src/schemas/common.js";
 
 const fields = {
@@ -37,6 +44,42 @@ describe("[00 2] upload contracts", () => {
     const result = CreateUploadRequestSchema.safeParse({ contentType: "image/png", sizeBytes: 0 });
     if (!result.success) expect(classifyUploadRequestError(result.error)).toBe("VALIDATION_ERROR");
     expect(result.success).toBe(false);
+  });
+});
+
+describe("[00 2.2] upload response", () => {
+  const response = {
+    url: "https://bucket.s3.us-east-1.amazonaws.com/",
+    fields: { key: "tmp/01JAZ3K9V2Q8W6X4Y7T5R1M0NP.jpg" },
+    imageKey: "tmp/01JAZ3K9V2Q8W6X4Y7T5R1M0NP.jpg",
+    expiresAt: "2026-10-24T15:05:00.000Z",
+  };
+
+  it("accepts a presigned POST response", () => {
+    expect(CreateUploadResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it.each([
+    { expiresAt: "mañana" },
+    { fields: { key: 1 } },
+    { url: "javascript:alert(1)" },
+  ])("rejects %o", (override) => {
+    expect(CreateUploadResponseSchema.safeParse({ ...response, ...override }).success).toBe(false);
+  });
+});
+
+describe("[00 4.2] reviewed product", () => {
+  it("accepts read-only AI provenance", () => {
+    const parsed = ReviewedProductSchema.parse({ ...fields, aiConfidence: "low", aiNotes: "  etiqueta borrosa  " });
+    expect(parsed.aiNotes).toBe("etiqueta borrosa");
+  });
+
+  it("rejects unknown keys", () => {
+    expect(ReviewedProductSchema.safeParse({ ...fields, barcode: "7700000000000" }).success).toBe(false);
+  });
+
+  it("keeps the inventory value exact at the bounds", () => {
+    expect(1_000 * MAX_QUANTITY * MAX_UNIT_PRICE_COP).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
   });
 });
 
