@@ -91,15 +91,15 @@ const ProductFieldsBase = z.strictObject({
   description: z.string().trim().max(500),
   brand: z.string().trim().min(1).max(80).optional(),
   sku: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).optional(),
-  quantity: z.number().int().min(0).max(1_000_000),
-  unitPriceCop: z.number().int().min(0).max(1_000_000_000),
+  quantity: z.number().int().min(0).max(MAX_QUANTITY), // 100_000
+  unitPriceCop: z.number().int().min(0).max(MAX_UNIT_PRICE_COP), // 50_000_000,
 });
 export const ProductFieldsSchema = ProductFieldsBase.extend({
   description: ProductFieldsBase.shape.description.default(""),
 });
 export const ReviewedProductSchema = ProductFieldsSchema.extend({
   aiConfidence: Confidence.optional(),
-  aiNotes: z.string().max(300).optional(),
+  aiNotes: z.string().trim().max(300).optional(),
 });
 export const ProductSchema = ReviewedProductSchema.extend({
   id: Ulid,
@@ -174,7 +174,7 @@ required, no personal data.
 
 - `name: @ghoststock/contracts`, `type: module`, `exports` with `types` and `import`
   pointing at `dist/`, `sideEffects: false`.
-- Scripts: `build` (`tsc -p tsconfig.json`), `test` (`vitest run`), `typecheck`.
+- Scripts: `build` (`tsc -p tsconfig.build.json`, src only), `test` (`vitest run`), `typecheck`.
 - Dependencies: `zod` 4.x. Dev: `typescript`, `vitest`. Versions pinned exactly by
   the lockfile at scaffold time.
 - `tsconfig`: `strict`, `target ES2022`, `module/moduleResolution NodeNext`,
@@ -189,3 +189,21 @@ Vitest unit tests (this package has no UI or network, ADR 0009):
 - key schemas reject traversal, wrong prefix, lowercase ULIDs;
 - stats math on `productsFixture` (exact expected numbers);
 - CSV: BOM, header, quoting, formula guard, row count.
+
+## Additional exports (reconciled after implementation)
+
+- `IMAGE_CONTENT_TYPES`, `IMAGE_EXTENSIONS` (content type to key extension),
+  `ErrorCodeSchema`, `MAX_QUANTITY`, `MAX_UNIT_PRICE_COP`.
+- `classifyUploadRequestError(zodError)`: the single place that maps upload request
+  issues to `UNSUPPORTED_MEDIA_TYPE`, `IMAGE_TOO_LARGE` or `VALIDATION_ERROR`; the API
+  uses it so the mapping is not duplicated.
+- `CSV_HEADER`; the formula guard also applies to cells with leading whitespace.
+- `CreateUploadResponseSchema.url` uses `z.httpUrl()` (no `javascript:` or other
+  schemes).
+- Fixtures: `fixtureId(n)`, `createProductsRequestFixture`,
+  `createProductsResponseFixture`, `listProductsResponseFixture`,
+  `updateProductRequestFixture`, `productResponseFixture`,
+  `updateSettingsRequestFixture`.
+- Infra config: blank numeric context fails validation instead of becoming 0; an
+  absent `enableTests` is `false` on purpose (test gates are opt-in).
+- `exports` adds `default` next to `import` for tools that resolve without conditions.
