@@ -197,6 +197,8 @@ describe("mapBedrockError", () => {
     ["The provided image does not match the specified format", "UNSUPPORTED_MEDIA_TYPE"],
     ["Image exceeds max dimensions", "UNSUPPORTED_MEDIA_TYPE"],
     ["Unable to decode the provided bytes", "UNSUPPORTED_MEDIA_TYPE"],
+    ["The model returned the following errors: Unable to process the provided image", "UNSUPPORTED_MEDIA_TYPE"],
+    ["The model returned the following errors: invalid image format", "UNSUPPORTED_MEDIA_TYPE"],
     ["Malformed input request: toolConfig is invalid", "INTERNAL_ERROR"],
   ])("maps ValidationException %j to %s", (message, code) => {
     const error = new ValidationException({ message, ...meta });
