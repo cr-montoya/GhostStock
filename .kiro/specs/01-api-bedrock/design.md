@@ -135,7 +135,7 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
 
 - List: `Query PK = :ws AND begins_with(SK, "PRODUCT#")`, `ScanIndexForward: false`
   (ULIDs sort by time), follow `LastEvaluatedKey` up to 1 000 items.
-- Create: `CopyObject` once (`NoSuchKey` -> `IMAGE_NOT_FOUND`, nothing written; other
+- Create: build every product first (shared `mediaKey` from a new ULID), then `CopyObject` once (`NoSuchKey` -> `IMAGE_NOT_FOUND`, nothing written; other
   failures -> `STORAGE_ERROR`), then `BatchWriteItem` (max 10 items, retry unprocessed
   items up to 3 times after 100, 200 and 400 ms; any leftover or exception ->
   `STORAGE_ERROR`, after a best-effort batch delete of the new ids so no partial set
@@ -145,7 +145,8 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
 - Delete: `DeleteItem` with the same condition. `ConditionalCheckFailedException` ->
   `NOT_FOUND`.
 - `fromItem` strips `PK`, `SK`, `entity` and parses with `ProductSchema`. Any other
-  DynamoDB failure (list, get, update, delete, settings) -> `STORAGE_ERROR`.
+  DynamoDB failure (list, get, update, delete, settings) -> `STORAGE_ERROR`; a stored
+  item that fails its schema -> `INTERNAL_ERROR` (retrying cannot fix it).
 - Settings: `GetItem` on `SETTINGS`, missing -> `LOW_STOCK_DEFAULT`; `PutItem` stores
   `lowStockThreshold` and `updatedAt`.
 - The shared photo is not deleted with a product (other products may use it).
