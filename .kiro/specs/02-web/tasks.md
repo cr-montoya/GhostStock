@@ -1,70 +1,70 @@
-# Tasks: 02-web
+# Implementation Plan: 02-web
 
-## Implementation tasks
+Branch: `feat/02-<slug>` per slice, worktree `../GhostStock-web`. Builder: `web-dev`.
+Evaluators: `visual-qa`, `qa-engineer`, `code-reviewer`. Requires 00 merged.
+Every UI slice ships with desktop and phone screenshots in its PR.
 
-- [ ] 1. Scaffold `apps/web` workspace
-  - [ ] 1.1 Create `apps/web/package.json` with all dependencies from design.md
-  - [ ] 1.2 Create `apps/web/tsconfig.json` (strict, bundler module resolution)
-  - [ ] 1.3 Create `apps/web/vite.config.ts` with React plugin and `/api` proxy to `http://localhost:3000`
-  - [ ] 1.4 Create `apps/web/index.html` with `<div id="root">` and Spanish `lang="es"`
-  - [ ] 1.5 Add `apps/web` to the root workspaces array
+- [ ] 1. Scaffold web and Playwright workspaces
+  - Vite React TS app, Tailwind 4, shadcn init, router, providers, MSW bootstrap.
+  - `e2e/` workspace with `playwright.config.ts` (all five projects) and one passing
+    smoke spec on the empty shell; add `e2e` to the root `workspaces` list.
+  - Commit carries `ADR-EXEMPT: workspaces recorded in ADR 0002 and ADR 0009`.
+  - _Requirements: 11.1, 11.2_
 
-- [ ] 2. Design tokens and Tailwind
-  - [ ] 2.1 Create `src/styles/tokens.css` with all CSS custom properties from the ui-identity steering file
-  - [ ] 2.2 Create `tailwind.config.ts` extending shadcn/ui defaults with design token CSS variables
-  - [ ] 2.3 Run `npx shadcn@latest init` and add components: button, card, input, textarea, badge, dialog, toast, checkbox, select, separator
+- [ ] 2. Design system
+  - `tokens.css`, `globals.css`, fonts, grain, glows, fog, shadcn theme mapping,
+    `Logo`, `GhostEmptyState`, `ProductPhoto`, `copy/es.ts` skeleton.
+  - Visual baseline of a token showcase route (dev only).
+  - _Requirements: 1.1, 1.2, 1.3, 10.2_
 
-- [ ] 3. API client (`src/api/`)
-  - [ ] 3.1 `client.ts` — `apiFetch<T>()` with `ApiError` class carrying `ErrorCode`
-  - [ ] 3.2 `analyze.ts` — `getUploadUrl()`, `uploadToS3()`, `analyzePhoto()`
-  - [ ] 3.3 `items.ts` — `saveItems()`, `listItems()`, `getItem()`, `updateItem()`, `deleteItem()`, `exportCsv()`
+- [ ] 3. Shell and command palette
+  - `AppShell`, `Sidebar`, `TabBar`, `CommandPalette`, 404 page.
+  - Playwright: navigation on both viewports, Ctrl+K search.
+  - _Requirements: 2.1, 2.2_
 
-- [ ] 4. MSW setup
-  - [ ] 4.1 Install MSW and run `npx msw init public/`
-  - [ ] 4.2 `src/mocks/browser.ts` — set up service worker
-  - [ ] 4.3 `src/mocks/handlers.ts` — all 8 route handlers from design.md using contracts fixtures
-  - [ ] 4.4 `src/main.tsx` — conditionally start MSW when `import.meta.env.DEV`
+- [ ] 4. API client and mocks
+  - `api/*`, query hooks, MSW handlers and scenarios from contract fixtures.
+  - _Requirements: 11.1_
 
-- [ ] 5. Shared components
-  - [ ] 5.1 `src/lib/utils.ts` — `cn()` helper
-  - [ ] 5.2 `src/components/ErrorMessage.tsx` — reusable error display with retry callback
-  - [ ] 5.3 `src/components/ConfirmDialog.tsx` — shadcn Dialog-based confirmation with cancel/confirm
-  - [ ] 5.4 `src/components/CategoryChips.tsx` — category filter chip group
-  - [ ] 5.5 `src/components/StatRow.tsx` — three stat cards with COP currency formatting
+- [ ] 5. Ritual
+  - `DropZone`, `CameraButton`, `resizeImage`, validation errors.
+  - Playwright: invalid type, oversize, preview shown (`setInputFiles`).
+  - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 6. Upload page (`src/pages/UploadPage.tsx`)
-  - [ ] 6.1 `src/components/UploadZone.tsx` — drag-and-drop, file-picker, thumbnail preview, four states
-  - [ ] 6.2 Implement full upload → presign → S3 upload → analyze → navigate flow
-  - [ ] 6.3 Spanish error messages for all `ErrorCode` values
+- [ ] 6. Resurrection
+  - `ResurrectionStage`, `ScanLine`, `Fog`, `StatusTicker`, failure and zero states.
+  - Playwright: status region announces, `model-error`, `throttled`,
+    `network-error`, `zero-candidates` scenarios with retry.
+  - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 7. Review page (`src/pages/ReviewPage.tsx`)
-  - [ ] 7.1 `src/components/CandidateCard.tsx` — checkbox, inline edit, "Precio estimado" label, category badge
-  - [ ] 7.2 "Guardar seleccionados" button disabled until ≥ 1 checked
-  - [ ] 7.3 Save flow: `POST /api/items`, success toast, navigate to `/inventario`
-  - [ ] 7.4 Redirect to `/` if no router state
+- [ ] 7. Review and save
+  - `CandidateCard`, `ConfidenceChip`, `useReview`, save mutation, toast, navigation.
+  - Playwright: no prefilled price or quantity, save disabled until valid, discard
+    and restore, success navigates to `/` with toast, failure keeps edits.
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3_
 
-- [ ] 8. Inventory page (`src/pages/InventoryPage.tsx`)
-  - [ ] 8.1 `src/components/InventoryTable.tsx` — responsive table/card grid, sort, row actions
-  - [ ] 8.2 `StatRow` wired to loaded items
-  - [ ] 8.3 Search box with client-side filter
-  - [ ] 8.4 "Exportar CSV" button triggering download
-  - [ ] 8.5 Empty state with illustration and CTA
+- [ ] 8. Dashboard
+  - KPI cards with count-up, charts, low-stock list, recent grid, empty state.
+  - Playwright: KPI values equal `computeInventoryStats(productsFixture)`; `empty`
+    scenario shows the ghost and CTA.
+  - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 9. Item detail page (`src/pages/ItemDetailPage.tsx`)
-  - [ ] 9.1 `src/components/ItemForm.tsx` — full editable form pre-filled from API
-  - [ ] 9.2 Save via `PUT /api/items/:id` with success toast
-  - [ ] 9.3 Delete via `DELETE /api/items/:id` with `ConfirmDialog`, then navigate to `/inventario`
+- [ ] 9. Inventory
+  - Table and cards, filters, drawer edit with optimistic update, delete dialog, CSV.
+  - Playwright: search and chips, edit, delete, CSV download content checked with
+    `productsToCsv`.
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 10. Router and app shell
-  - [ ] 10.1 `src/App.tsx` — `createBrowserRouter` with all four routes
-  - [ ] 10.2 Page transition animations with `framer-motion` and `useReducedMotion()` guard
+- [ ] 10. Settings
+  - `ThresholdForm`; dashboard and inventory react to the saved threshold.
+  - _Requirements: 9.1_
 
-- [ ] 11. Tests
-  - [ ] 11.1 `UploadZone.test.tsx` — file validation (oversize, wrong type), idle and error states
-  - [ ] 11.2 `CandidateCard.test.tsx` — inline edit, checkbox, price label
-  - [ ] 11.3 `InventoryPage.test.tsx` — search filter, empty state, stat row values
-  - [ ] 11.4 `ReviewPage.test.tsx` — save button disabled state, redirect without state
+- [ ] 11. Accessibility, motion and visual pass
+  - `a11y.spec.ts` (axe on every screen), `motion.spec.ts` (reduced motion), keyboard
+    path, `visual` baselines for every screen and state; run `visual-qa`.
+  - _Requirements: 10.1, 10.3, 10.4, 11.3, 11.4_
 
-- [ ] 12. Build and verify
-  - [ ] 12.1 `npm run build` exits 0 (Vite build, no TypeScript errors)
-  - [ ] 12.2 `npm test` exits 0 with all tests passing
+- [ ] 12. Verify and sync
+  - `npm run build -w @ghoststock/web` (no MSW in bundle), web e2e green on both
+    viewports, `spec-sync`, `docs/demo.md` first draft.
+  - _Requirements: 11.2, 11.3_
