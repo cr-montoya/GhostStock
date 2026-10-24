@@ -16,7 +16,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - Commit carries `ADR-EXEMPT: workspaces recorded in ADR 0002 and ADR 0009`.
   - _Requirements: 11.1, 11.2_
 
-- [ ] 2. Design system
+- [x] 2. Design system
   - `tokens.css`, `globals.css`, fonts, grain, glows, fog, shadcn theme mapping,
     `Logo`, `GhostEmptyState`, `ProductPhoto`, `copy/es.ts` skeleton.
   - Visual baseline of a token showcase route (dev only).
