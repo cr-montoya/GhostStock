@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openRitual, pickPhoto } from "../web/helpers";
+import { openRitual, pickPhoto, summonCandidates } from "../web/helpers";
 import { VIEWPORTS, capture } from "./viewports";
 
 for (const [name, use] of Object.entries(VIEWPORTS)) {
@@ -45,5 +45,21 @@ for (const [name, use] of Object.entries(VIEWPORTS)) {
         await capture(page, `resurrection-${scenario}-${name}.png`);
       });
     }
+  });
+}
+
+for (const [name, use] of Object.entries(VIEWPORTS)) {
+  test.describe(`${name} review`, () => {
+    test.use({ ...use, reducedMotion: "reduce" });
+
+    test("[02 11.4] review candidates with pending fields", async ({ page }) => {
+      await openRitual(page);
+      await summonCandidates(page);
+      await page.getByRole("button", { name: "Ver pendientes" }).click();
+      await page.getByRole("article", { name: "Producto 1 de 3" }).getByLabel("Cantidad").fill("24");
+      await page.getByRole("article", { name: "Producto 3 de 3" }).getByRole("button", { name: "Descartar" }).click();
+      await page.getByRole("article", { name: "Producto 3 de 3" }).getByRole("button", { name: "Restaurar" }).waitFor();
+      await capture(page, `review-${name}.png`);
+    });
   });
 }
