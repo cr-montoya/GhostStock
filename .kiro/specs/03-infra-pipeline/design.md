@@ -1,212 +1,164 @@
-# Design: 03-infra-pipeline
+# Design Document: 03-infra-pipeline
 
-## Package structure
+## Overview
+
+Two stacks. `GhostStockPipelineStack` (deployed once by hand) builds and deploys stage
+`Prod`, which holds a single `GhostStockAppStack` with every runtime resource. One app
+stack avoids cross-stack cycles between buckets, OAC policies and the distribution
+(ADR 0008).
+
+## Structure
 
 ```
 infra/
-├── bin/
-│   └── ghoststock.ts             # CDK app entry point
-├── lib/
-│   ├── pipeline-stack.ts         # GhostStockPipelineStack (self-mutating)
-│   ├── app-stage.ts              # GhostStockAppStage (one stage, one region)
-│   ├── stacks/
-│   │   ├── storage-stack.ts      # S3 buckets (upload + SPA)
-│   │   ├── api-stack.ts          # API Gateway + Lambda functions
-│   │   ├── data-stack.ts         # DynamoDB table
-│   │   ├── cdn-stack.ts          # CloudFront distribution + response headers policy
-│   │   └── monitoring-stack.ts   # Budget alarm, SNS topic
-│   └── constructs/
-│       ├── secure-bucket.ts      # Reusable S3 construct with Block Public Access
-│       └── ghost-function.ts     # Reusable NodejsFunction construct with common config
-├── test/
-│   ├── pipeline.test.ts
-│   ├── storage.test.ts
-│   ├── api.test.ts
-│   ├── data.test.ts
-│   └── cdn.test.ts
-├── cdk.json
-├── package.json
-└── tsconfig.json
+  bin/ghoststock.ts          load + validate config, PipelineStack, cdk-nag aspects
+  lib/
+    config.ts                readConfig(app): InfraConfig (InfraConfigSchema)
+    pipeline-stack.ts        GhostStockPipelineStack
+    app-stage.ts             GhostStockAppStage (exposes baseUrl CfnOutput)
+    app-stack.ts             GhostStockAppStack
+    constructs/
+      media-bucket.ts        MediaBucket (lifecycle, CORS POST)
+      api-function.ts        ApiFunction (NodejsFunction defaults + LogGroup)
+      frontend.ts            Frontend (web bucket, distribution, spa function,
+                             headers policy, BucketDeployment)
+    functions/spa-rewrite.js CloudFront Function source
+    nag.ts                   suppressions with reasons, in one place
+  test/*.test.ts             Vitest + assertions
+  cdk.json, package.json, tsconfig.json, vitest.config.ts
 ```
 
-## CDK app entry (`bin/ghoststock.ts`)
+## Pipeline
 
-```typescript
-const app = new cdk.App();
-new GhostStockPipelineStack(app, "GhostStockPipeline", {
-  env: { account: app.node.tryGetContext("account"), region: app.node.tryGetContext("region") },
-});
+```mermaid
+flowchart LR
+  GH[GitHub main] --> SRC[Source: CodeConnections]
+  SRC --> SY[Synth: npm ci, npm run build, cdk synth]
+  SY --> UP[UpdatePipeline: self-mutation]
+  UP --> AS[Assets: publish Lambda zips and web assets]
+  AS --> PRE{enableTests?}
+  PRE -- yes --> T1[Pre: unit + Playwright web-desktop]
+  PRE -- no --> DEP
+  T1 --> DEP[Deploy Prod/GhostStockAppStack]
+  DEP --> POST{enableTests?}
+  POST -- yes --> T2[Post: Playwright smoke on BaseUrl]
 ```
 
-Context keys in `cdk.json`:
-- `account` — AWS account ID
-- `region` — deployment region (e.g., `us-east-1`)
-- `connectionArn` — CodeConnections ARN for GitHub
-- `repoOwner` — GitHub org/username
-- `repoName` — repository name
-- `branch` — `main`
-- `alarmEmail` — billing alarm email
-
-## Pipeline stack (`lib/pipeline-stack.ts`)
-
-```typescript
-const pipeline = new pipelines.CodePipeline(this, "Pipeline", {
-  selfMutation: true,
-  synth: new pipelines.ShellStep("Synth", {
-    input: pipelines.CodePipelineSource.connection(
-      `${repoOwner}/${repoName}`, branch, { connectionArn }
-    ),
-    commands: ["npm ci", "npx cdk synth"],
+```ts
+const synth = new pipelines.ShellStep("Synth", {
+  input: pipelines.CodePipelineSource.connection(cfg.repo, cfg.branch, {
+    connectionArn: cfg.connectionArn!,
   }),
-  codeBuildDefaults: {
-    buildEnvironment: { buildImage: LinuxBuildImage.STANDARD_7_0 }, // Node 22
-  },
+  env: { CONNECTION_ARN: cfg.connectionArn!, BUDGET_EMAIL: cfg.budgetEmail ?? "" },
+  commands: [
+    "npm ci",
+    "npm run build",
+    "cd infra && npx cdk synth -c connectionArn=$CONNECTION_ARN -c budgetEmail=$BUDGET_EMAIL",
+  ],
+  primaryOutputDirectory: "infra/cdk.out",
 });
-
-pipeline.addStage(new GhostStockAppStage(this, "Prod", { env }));
+const pipeline = new pipelines.CodePipeline(this, "Pipeline", {
+  pipelineName: "GhostStock",
+  selfMutation: true,
+  synth,
+  codeBuildDefaults: { buildEnvironment: { buildImage: NODE22_IMAGE } },
+});
+const prod = new GhostStockAppStage(this, "Prod", { env, config: cfg });
+pipeline.addStage(prod, cfg.enableTests ? {
+  pre: [new pipelines.ShellStep("Test", { commands: [
+    "npm ci", "npm test",
+    "npx playwright install --with-deps chromium",
+    "npx playwright test -c e2e --project=web-desktop",
+  ]})],
+  post: [new pipelines.ShellStep("Smoke", {
+    envFromCfnOutputs: { BASE_URL: prod.baseUrl },
+    commands: ["npm ci", "npx playwright install --with-deps chromium",
+               "npx playwright test -c e2e --project=smoke"],
+  })],
+} : undefined);
 ```
 
-## Application stage (`lib/app-stage.ts`)
+`NODE22_IMAGE`: the managed CodeBuild image whose runtime list includes Node.js 22,
+selected and pinned in task 2 (verified against the CodeBuild docs, not assumed).
+`connectionArn` is required only by the pipeline stack; the app stage never reads it.
 
-```typescript
-export class GhostStockAppStage extends cdk.Stage {
-  constructor(scope, id, props) {
-    super(scope, id, props);
-    const storage    = new StorageStack(this, "Storage");
-    const data       = new DataStack(this, "Data");
-    const api        = new ApiStack(this, "Api", { uploadBucket: storage.uploadBucket, table: data.table });
-    const cdn        = new CdnStack(this, "Cdn",  { spaBucket: storage.spaBucket, httpApi: api.httpApi });
-    const monitoring = new MonitoringStack(this, "Monitoring", { alarmEmail });
-  }
-}
-```
+## App stack
 
-## Storage stack
-
-- `SecureBucket` construct: `blockPublicAccess: BlockPublicAccess.BLOCK_ALL`,
-  `encryption: BucketEncryption.S3_MANAGED`, `enforceSSL: true`.
-- Upload bucket: `removalPolicy: RemovalPolicy.DESTROY` (demo),
-  lifecycle rule `Expiration.after(Duration.days(1))` on prefix `uploads/`.
-- SPA bucket: no versioning needed; deployment via `BucketDeployment` pointing to
-  `apps/web/dist`.
-
-## Data stack
-
-```typescript
-const table = new dynamodb.Table(this, "Items", {
-  tableName:           "GhostStockItems",
-  partitionKey:        { name: "PK", type: AttributeType.STRING },
-  billingMode:         BillingMode.PAY_PER_REQUEST,
-  encryption:          TableEncryption.AWS_MANAGED,
-  pointInTimeRecovery: true,
-  removalPolicy:       RemovalPolicy.DESTROY, // demo
-});
-table.addGlobalSecondaryIndex({
-  indexName:      "CategoryCreatedAtIndex",
-  partitionKey:   { name: "category",  type: AttributeType.STRING },
-  sortKey:        { name: "createdAt", type: AttributeType.STRING },
-  projectionType: ProjectionType.ALL,
-});
-```
-
-## API stack
-
-`GhostFunction` construct (extends `NodejsFunction`):
-- `runtime: Runtime.NODEJS_22_X`
-- `bundling: { minify: true, sourceMap: false, externalModules: [] }` — esbuild,
-  no Docker required.
-- `tracing: Tracing.PASS_THROUGH` (overridden to `ACTIVE` for analyzeHandler).
-- `logRetention: RetentionDays.ONE_WEEK`.
-- Environment: `TABLE_NAME`, `UPLOAD_BUCKET`, `BEDROCK_MODEL_ID` injected from props.
-
-Per-function IAM (added in the stack, not the construct):
-
-| Function | Grant method |
+| Resource | Key settings |
 | --- | --- |
-| `analyzeHandler` | `table.grantReadData(fn)` scoped out; manual `fn.addToRolePolicy` for `bedrock:InvokeModel` + `s3:GetObject` scoped to `uploads/*` |
-| `itemsWriteHandler` | `table.grantWriteData(fn)` |
-| `itemsReadHandler` | `table.grantReadData(fn)` |
-| `presignHandler` | manual policy for `s3:PutObject` scoped to `uploads/*` |
-| `exportHandler` | `table.grantReadData(fn)` |
+| Media bucket | BPA all, SSE-S3, enforceSSL, `ObjectOwnership.BUCKET_OWNER_ENFORCED`, lifecycle `tmp/` 1 day, abort multipart 1 day, CORS `[{ allowedMethods: [POST], allowedOrigins: ["*"], allowedHeaders: ["*"], maxAge: 3000 }]`, `RemovalPolicy.DESTROY` + `autoDeleteObjects` (demo) |
+| Web bucket | same hardening, no CORS, no lifecycle, DESTROY + autoDelete |
+| Table | `PK` / `SK` strings, PAY_PER_REQUEST, AWS_MANAGED, PITR on, DESTROY (demo) |
+| uploads fn | 256 MB, 10 s, env `MEDIA_BUCKET` |
+| analyses fn | 1024 MB, 28 s, reserved concurrency 5, env `MEDIA_BUCKET`, `BEDROCK_MODEL_ID` |
+| inventory fn | 256 MB, 10 s, env `MEDIA_BUCKET`, `TABLE_NAME`, `LOW_STOCK_DEFAULT` |
+| HTTP API | routes per `architecture.md` plus `$default` to inventory, `HttpLambdaIntegration`, default stage throttle 10/5, access log group JSON 14 days |
+| Distribution | see below |
+| Budget | `CfnBudget` COST MONTHLY `budgetUsd`, ACTUAL 80% and 100% to `budgetEmail`, only if provided |
 
-HTTP API routes (Lambda proxy integration):
+`ApiFunction` defaults: `runtime NODEJS_22_X`, `architecture ARM_64`,
+`bundling { minify: true, sourceMap: true, target: "node22", format: OutputFormat.ESM,
+mainFields: ["module", "main"] }`, `projectRoot` repo root, `depsLockFilePath`
+root `package-lock.json`, explicit `LogGroup` (14 days, DESTROY), Powertools env.
 
-```
-POST   /api/upload-url    → presignHandler
-POST   /api/analyze       → analyzeHandler
-POST   /api/items         → itemsWriteHandler
-GET    /api/items         → itemsReadHandler
-GET    /api/items/export  → exportHandler
-GET    /api/items/{id}    → itemsReadHandler
-PUT    /api/items/{id}    → itemsWriteHandler
-DELETE /api/items/{id}    → itemsWriteHandler
-```
+IAM per function (explicit `PolicyStatement`s, no broad grants):
+- uploads: `s3:PutObject` on `${mediaBucket.bucketArn}/tmp/*`.
+- analyses: `s3:GetObject` on `.../tmp/*`; `bedrock:InvokeModel` on
+  `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}` and
+  `arn:aws:bedrock:*::foundation-model/${modelId without the "us." prefix}`.
+- inventory: DynamoDB actions from `security.md` on the table ARN; `s3:GetObject` on
+  `.../tmp/*`; `s3:PutObject` on `.../media/products/*`.
 
-Throttling: `defaultRouteSettings: { throttlingBurstLimit: 10, throttlingRateLimit: 5 }`.
+## Distribution (ADR 0006)
 
-## CDN stack
-
-```typescript
-const distribution = new cloudfront.Distribution(this, "Cdn", {
+```ts
+const apiDomain = Fn.select(2, Fn.split("/", httpApi.apiEndpoint));
+new cloudfront.Distribution(this, "Distribution", {
+  defaultRootObject: "index.html",
   defaultBehavior: {
-    origin: S3BucketOrigin.withOriginAccessControl(spaBucket),
-    viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+    origin: S3BucketOrigin.withOriginAccessControl(webBucket),
+    viewerProtocolPolicy: REDIRECT_TO_HTTPS,
+    functionAssociations: [{ function: spaRewrite, eventType: VIEWER_REQUEST }],
+    responseHeadersPolicy: headers,
   },
   additionalBehaviors: {
-    "/api/*": { origin: new HttpOrigin(httpApi.url), ... },
+    "/api/*": { origin: new HttpOrigin(apiDomain), allowedMethods: ALLOW_ALL,
+                cachePolicy: CACHING_DISABLED,
+                originRequestPolicy: ALL_VIEWER_EXCEPT_HOST_HEADER,
+                viewerProtocolPolicy: HTTPS_ONLY, responseHeadersPolicy: headers },
+    "/media/*": { origin: S3BucketOrigin.withOriginAccessControl(mediaBucket),
+                  cachePolicy: CACHING_OPTIMIZED, viewerProtocolPolicy: REDIRECT_TO_HTTPS,
+                  responseHeadersPolicy: headers },
   },
-  minimumProtocolVersion: SecurityPolicyProtocol.TLS_V1_2_2021,
-  httpVersion: HttpVersion.HTTP2_AND_3,
-  responseHeadersPolicy: buildSecurityHeadersPolicy(this, { uploadBucketDomain, apiDomain }),
+  minimumProtocolVersion: TLS_V1_2_2021,
+  httpVersion: HTTP2_AND_3,
 });
 ```
 
-`buildSecurityHeadersPolicy` constructs a `ResponseHeadersPolicy` with all headers
-from `security.md` (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
-CSP). The CSP string is built from the actual bucket and API domain values.
+Only keys under `media/` are reachable because CloudFront forwards the path as the
+key; `tmp/` objects are never addressable through the distribution.
+`spa-rewrite.js`: if the URI has no file extension and does not start with `/api/` or
+`/media/`, set it to `/index.html`.
 
-## Monitoring stack
+## cdk-nag suppressions (expected, each with reason in `nag.ts`)
 
-```typescript
-const topic = new sns.Topic(this, "BillingAlarm");
-topic.addSubscription(new subscriptions.EmailSubscription(alarmEmail));
-new cloudwatch.CfnAlarm(this, "BudgetAlarm", {
-  alarmName: "GhostStock-Monthly-Budget",
-  namespace: "AWS/Billing", metricName: "EstimatedCharges",
-  dimensions: [{ name: "Currency", value: "USD" }],
-  statistic: "Maximum", period: 86400, comparisonOperator: "GreaterThanThreshold",
-  threshold: 20, evaluationPeriods: 1,
-  alarmActions: [topic.topicArn],
-});
-```
+- `AwsSolutions-S1` bucket access logs: demo cost and scope.
+- `AwsSolutions-CFR1`, `CFR2` geo restriction and WAF: public demo, throttling and
+  budget used instead.
+- `AwsSolutions-CFR4` only if the default certificate forces TLSv1 on the default
+  domain.
+- `AwsSolutions-APIG4` no authorizer: single-workspace demo by product decision.
+- `AwsSolutions-IAM4`, `IAM5` for CDK-managed helper roles (BucketDeployment,
+  autoDeleteObjects, pipeline) and the `foundation-model/*` region wildcard.
+- `AwsSolutions-L1` for CDK helper Lambdas whose runtime CDK controls.
 
-## cdk-nag
+## Tests
 
-`Aspects.of(app).add(new AwsSolutionsChecks())` in `bin/ghoststock.ts`.
-Suppressions are added in each stack with `NagSuppressions.addResourceSuppressions`
-and a comment explaining the reason (e.g., demo removal policy, billing metric requiring
-us-east-1).
-
-## Package configuration
-
-```json
-{
-  "name": "@ghoststock/infra",
-  "scripts": {
-    "build": "tsc",
-    "test":  "vitest run",
-    "synth": "cdk synth",
-    "diff":  "cdk diff"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "2.x",
-    "constructs": "10.x",
-    "cdk-nag": "2.x"
-  },
-  "devDependencies": {
-    "aws-cdk": "2.x",
-    "vitest": "2.1.8",
-    "typescript": "5.6.3"
-  }
-}
-```
+Vitest with `Template.fromStack`, context `aws:cdk:bundling-stacks: []` to skip
+esbuild in tests. Assertions: bucket hardening and lifecycle and CORS; table keys and
+PITR; each function runtime, architecture, timeout, memory, concurrency, env; each
+role policy matches the IAM table exactly; HTTP API routes, throttling, no CORS;
+distribution behaviors, OAC, function association, no custom error responses; CSP
+contains the media bucket domain; `BucketDeployment` with invalidation; budget only
+when email given; pipeline `selfMutation`, synth env vars, test steps only when
+`enableTests`; config validation errors; `Annotations` has no cdk-nag errors.
