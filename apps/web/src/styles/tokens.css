@@ -1,0 +1,45 @@
+/*
+ * GhostStock design tokens (ui-identity.md). The only file under src/ allowed to hold
+ * raw color literals; everything else reads these variables through Tailwind.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Palette */
+  --bg: #07060b;
+  --surface: #0f0c17;
+  --surface-raised: #171226;
+  --border: rgba(167, 139, 250, 0.14);
+  --text: #ede9fe;
+  --muted: #8b85a3;
+  --violet: #7c3aed;
+  --violet-soft: #a78bfa;
+  --ectoplasm: #39ff88;
+  --ember: #ff8a3d;
+  --blood: #f43f5e;
+  --ink: #000000;
+  --white: #ffffff;
+
+  /* Derived, all from the palette above */
+  --border-strong: rgba(167, 139, 250, 0.28);
+  --surface-glass: color-mix(in oklab, var(--surface) 80%, transparent);
+  --violet-glow: color-mix(in oklab, var(--violet) 45%, transparent);
+  --ectoplasm-glow: color-mix(in oklab, var(--ectoplasm) 45%, transparent);
+  --shadow-soft: 0 1px 0 0 rgba(237, 233, 254, 0.04) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
+
+  /* Shape */
+  --radius: 14px;
+  --radius-input: 10px;
+  --radius-chip: 999px;
+
+  /* Type */
+  --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+  --font-body: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-code: "Geist Mono Variable", ui-monospace, monospace;
+
+  /* Motion */
+  --duration-micro: 150ms;
+  --duration-standard: 250ms;
+  --duration-hero: 450ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

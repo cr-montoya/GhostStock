@@ -1,1 +1,199 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "./tokens.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Tokens wired into Tailwind utilities and the shadcn/ui semantic names. */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-black: var(--ink);
+  --color-white: var(--white);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-glass: var(--surface-glass);
+  --color-text: var(--text);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-ectoplasm: var(--ectoplasm);
+  --color-ember: var(--ember);
+  --color-blood: var(--blood);
+  --color-border-strong: var(--border-strong);
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface-raised);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--violet);
+  --color-primary-foreground: var(--white);
+  --color-secondary: var(--surface-raised);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-raised);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-raised);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--blood);
+  --color-border: var(--border);
+  --color-input: var(--border-strong);
+  --color-ring: var(--violet);
+  --color-chart-1: var(--violet-soft);
+  --color-chart-2: var(--violet);
+  --color-chart-3: var(--ectoplasm);
+  --color-chart-4: var(--ember);
+  --color-chart-5: var(--muted);
+
+  --radius-sm: 8px;
+  --radius-md: var(--radius-input);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-full: var(--radius-chip);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-code);
+
+  --text-*: initial;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 20px;
+  --text-lg--line-height: 28px;
+  --text-xl: 28px;
+  --text-xl--line-height: 34px;
+  --text-2xl: 40px;
+  --text-2xl--line-height: 44px;
+  --text-3xl: 56px;
+  --text-3xl--line-height: 58px;
+
+  --ease-spring-out: var(--ease-out);
+  --shadow-glass: var(--shadow-soft);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html {
+    background: var(--bg);
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100dvh;
+    font-feature-settings: "ss01", "cv11";
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  ::selection {
+    background: var(--violet-glow);
+    color: var(--white);
+  }
+  :focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glass card: surface at 80% with blur, 1px inner hairline and a soft drop. */
+@utility glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--border);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 32px var(--violet-glow);
+}
+
+/* --- Atmosphere: grain, glows and fog (fixed, behind content, no pointer events) --- */
+
+.gs-grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.gs-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at -10% -10%, color-mix(in oklab, var(--violet) 22%, transparent), transparent 70%),
+    radial-gradient(40rem 30rem at 110% 0%, color-mix(in oklab, var(--violet-soft) 8%, transparent), transparent 70%),
+    radial-gradient(50rem 30rem at 90% 120%, color-mix(in oklab, var(--ectoplasm) 5%, transparent), transparent 70%);
+}
+
+.gs-fog {
+  position: fixed;
+  left: -25%;
+  right: -25%;
+  bottom: -10%;
+  height: 55vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    radial-gradient(40% 60% at 20% 80%, color-mix(in oklab, var(--violet-soft) 9%, transparent), transparent 70%),
+    radial-gradient(35% 55% at 60% 90%, color-mix(in oklab, var(--text) 5%, transparent), transparent 70%),
+    radial-gradient(30% 50% at 90% 85%, color-mix(in oklab, var(--violet) 10%, transparent), transparent 70%);
+  filter: blur(20px);
+  mask-image: linear-gradient(to top, black 35%, transparent);
+  animation: gs-fog-drift 38s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes gs-fog-drift {
+  from {
+    transform: translate3d(-6%, 0, 0);
+  }
+  to {
+    transform: translate3d(6%, -3%, 0);
+  }
+}
+
+@keyframes gs-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .gs-fog {
+    animation: none;
+  }
+}
