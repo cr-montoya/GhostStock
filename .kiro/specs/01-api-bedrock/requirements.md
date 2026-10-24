@@ -1,81 +1,149 @@
-# Requirements: 01-api-bedrock
+# Requirements Document: 01-api-bedrock
 
-## Overview
+## Introduction
 
-Lambda-based HTTP API backed by API Gateway, Amazon Bedrock (Claude 3 Sonnet via
-Converse), DynamoDB, and S3. Implements the analyze → save → CRUD → export flow.
-All schemas come from `@ghoststock/contracts`.
+The GhostStock API: three Lambda functions behind an API Gateway HTTP API, reached by
+the browser through CloudFront at `/api/*`. It issues upload slots, analyzes photos
+with Amazon Bedrock and manages the inventory in DynamoDB. Every shape comes from
+`@ghoststock/contracts`. Rules: `ai-integration.md`, `security.md`. Decisions:
+ADR 0005, ADR 0007, ADR 0010.
 
 ## Requirements
 
-### EARS-1 — Presigned POST for image upload
-WHEN the client requests an upload URL,
-THE SYSTEM SHALL return a presigned POST URL and fields for the S3 upload bucket,
-constraining Content-Type to `image/jpeg | image/png | image/webp`,
-`content-length-range` to 1–5 242 880 bytes, key prefix `uploads/<ulid>`,
-and expiry to 300 seconds.
+### Requirement 1: Upload slots
 
-### EARS-2 — Image analysis with Bedrock
-WHEN `POST /api/analyze` receives `{ photoKey }`,
-THE SYSTEM SHALL call Bedrock Converse with the image block (fetched from S3),
-forced tool use (`toolChoice: { any: {} }`), and the `productCandidatesJsonSchema`
-tool definition, then validate the response against `ProductCandidatesSchema` and
-return `{ candidates }`.
+**User Story:** As the web app, I want a short-lived, constrained upload slot, so that
+the photo goes straight from the browser to S3 without passing through the API.
 
-### EARS-3 — No fabrication
-WHEN Bedrock returns zero candidates, a malformed tool call, a validation failure,
-or a non-tool-use stop reason,
-THE SYSTEM SHALL return an explicit `NO_CANDIDATES` or `ANALYSIS_FAILED` error
-and SHALL NOT return invented product data.
+#### Acceptance Criteria
 
-### EARS-4 — Bedrock throttling retry
-WHEN Bedrock returns `ThrottlingException`,
-THE SYSTEM SHALL retry up to 2 times with exponential back-off (base 500 ms)
-and return `THROTTLED` after exhausting retries.
+1. WHEN `POST /api/uploads` receives a valid `CreateUploadRequest`, THE uploads
+   function SHALL return `201` with a presigned POST for key `tmp/<ulid>.<ext>`,
+   `Content-Type` fixed to the requested type, `content-length-range` 1 to
+   5 242 880 and expiry 300 s.
+2. IF `contentType` is not allowed, THEN THE API SHALL return `415
+   UNSUPPORTED_MEDIA_TYPE`.
+3. IF `sizeBytes` exceeds 5 242 880, THEN THE API SHALL return `413 IMAGE_TOO_LARGE`.
 
-### EARS-5 — Image validation
-WHEN the image exceeds 5 MB or has an unsupported MIME type,
-THE SYSTEM SHALL return `IMAGE_TOO_LARGE` or `UNSUPPORTED_TYPE` before calling
-Bedrock.
+### Requirement 2: Photo analysis
 
-### EARS-6 — Save items
-WHEN `POST /api/items` receives `{ items, photoKey }` (1–5 validated candidates),
-THE SYSTEM SHALL persist each as an `InventoryItem` in DynamoDB with a ULID id,
-set `createdAt` and `updatedAt` to the current UTC ISO-8601 timestamp, and return
-`{ saved: InventoryItem[] }`.
+**User Story:** As the user, I want my photo analyzed into product candidates, so that
+I do not type my inventory by hand.
 
-### EARS-7 — List items
-WHEN `GET /api/items` is called with optional `?category=` and `?sort=createdAt|name`,
-THE SYSTEM SHALL return `{ items: InventoryItem[], total: number }` using a GSI
-query (not a full Scan).
+#### Acceptance Criteria
 
-### EARS-8 — Get item
-WHEN `GET /api/items/:id` is called,
-THE SYSTEM SHALL return the matching `InventoryItem` or a `NOT_FOUND` error.
+1. WHEN `POST /api/analyses` receives a valid `imageKey`, THE analyses function SHALL
+   read the object metadata, then its bytes, call Bedrock Converse once with the image
+   and the `report_products` tool forced, and return `200` with an `Analysis`.
+2. IF the object does not exist, THEN THE API SHALL return `404 IMAGE_NOT_FOUND`.
+3. IF the stored object is larger than 5 242 880 bytes or its content type is not
+   allowed, THEN THE API SHALL return `413 IMAGE_TOO_LARGE` or
+   `415 UNSUPPORTED_MEDIA_TYPE` without calling Bedrock.
+4. THE analyses function SHALL assign a ULID `candidateId` to each candidate and
+   report `modelId` and `latencyMs`.
 
-### EARS-9 — Update item
-WHEN `PUT /api/items/:id` receives a partial `ProductCandidate` payload,
-THE SYSTEM SHALL update only the provided fields, set `updatedAt`, and return the
-full updated `InventoryItem`.
+### Requirement 3: Honest outcomes
 
-### EARS-10 — Delete item
-WHEN `DELETE /api/items/:id` is called,
-THE SYSTEM SHALL remove the item from DynamoDB and return HTTP 204.
+**User Story:** As the product owner, I want every analysis outcome to be truthful,
+so that the app never shows invented products.
 
-### EARS-11 — CSV export
-WHEN `GET /api/items/export` is called with optional `?category=`,
-THE SYSTEM SHALL return a UTF-8 CSV with a Spanish header row and one row per item,
-columns: id, nombre, descripcion, categoria, precio\_estimado, moneda, cantidad,
-sku, codigo\_barras, foto, creado\_en.
+#### Acceptance Criteria
 
-### EARS-12 — Input validation
-ALL handlers SHALL validate their inputs with zod schemas from `@ghoststock/contracts`
-and return `VALIDATION_ERROR` (HTTP 400) on failure before any AWS SDK call.
+1. WHEN the model reports zero products, THE API SHALL return `200` with
+   `candidates: []`.
+2. IF the response has no `report_products` tool call, a `stopReason` other than
+   `tool_use`, or the tool input fails `ModelOutputSchema`, THEN THE API SHALL return
+   `502 MODEL_INVALID_OUTPUT` and SHALL NOT return partial candidates.
+3. WHEN Bedrock throws `ThrottlingException`, `ServiceUnavailableException`,
+   `ModelNotReadyException` or `ModelTimeoutException`, THE analyses function SHALL
+   retry at most 2 times (400 ms, 1200 ms) and then return `503 MODEL_THROTTLED`.
+4. IF Bedrock throws `AccessDeniedException`, `ResourceNotFoundException` or a
+   `ValidationException` about the model, THEN THE API SHALL return
+   `503 MODEL_UNAVAILABLE`.
+5. THE analyses function SHALL issue at most one successful Converse call per request
+   and SHALL abort the SDK call after 25 s.
 
-### EARS-13 — Structured logs, no sensitive data
-ALL handlers SHALL emit structured JSON logs and SHALL NOT log image bytes,
-base64 strings, presigned URLs, or fields named password/token/secret/key.
+### Requirement 4: Save reviewed products
 
-### EARS-14 — Thin handlers
-EACH Lambda handler SHALL delegate business logic to pure functions testable without
-AWS SDK calls, using `aws-sdk-client-mock` for unit tests.
+**User Story:** As the user, I want to save the products I reviewed with their photo,
+so that they appear in my inventory.
+
+#### Acceptance Criteria
+
+1. WHEN `POST /api/products` receives a valid `CreateProductsRequest`, THE inventory
+   function SHALL copy the image once from `tmp/` to `media/products/<ulid>.<ext>`,
+   write every product with a new ULID, the shared `mediaKey`, and equal `createdAt`
+   and `updatedAt`, and return `201` with the created products.
+2. IF the source image no longer exists, THEN THE API SHALL return `404
+   IMAGE_NOT_FOUND` and write nothing.
+3. IF the copy or the write fails, THEN THE API SHALL return `500 STORAGE_ERROR`
+   and SHALL NOT report success for any product.
+
+### Requirement 5: Read, update and delete products
+
+**User Story:** As the user, I want to browse, correct and remove products.
+
+#### Acceptance Criteria
+
+1. WHEN `GET /api/products` is called, THE API SHALL return every product of the
+   workspace with one DynamoDB Query on `PK = WS#default` (following pagination up to
+   1 000 items), newest first, plus `count`.
+2. WHEN `GET /api/products/{id}` is called for an existing product, THE API SHALL
+   return it; otherwise `404 NOT_FOUND`.
+3. WHEN `PUT /api/products/{id}` receives a valid partial update, THE API SHALL update
+   only those fields and `updatedAt` with a condition that the item exists, and return
+   the full product; otherwise `404 NOT_FOUND`.
+4. WHEN `DELETE /api/products/{id}` is called for an existing product, THE API SHALL
+   delete it and return `204`; otherwise `404 NOT_FOUND`.
+
+### Requirement 6: Settings
+
+**User Story:** As the user, I want to configure the low-stock threshold.
+
+#### Acceptance Criteria
+
+1. WHEN `GET /api/settings` is called and no settings item exists, THE API SHALL
+   return `lowStockThreshold` from the `LOW_STOCK_DEFAULT` environment variable.
+2. WHEN `PUT /api/settings` receives a valid body, THE API SHALL store it and return
+   the stored settings.
+
+### Requirement 7: Validation and error envelope
+
+**User Story:** As the web app, I want every failure in one predictable shape.
+
+#### Acceptance Criteria
+
+1. EVERY handler SHALL validate path, query and body with the contract schemas before
+   any AWS SDK call and return `400 VALIDATION_ERROR` on failure.
+2. IF a request body is larger than 64 KB or is not JSON, THEN THE API SHALL return
+   `400 VALIDATION_ERROR`.
+3. EVERY error response SHALL match `ApiErrorSchema`, use the status from
+   `ERROR_HTTP_STATUS` and include the API Gateway `requestId`.
+4. IF an unexpected exception occurs, THEN THE API SHALL return `500 INTERNAL_ERROR`
+   without leaking stack traces or AWS identifiers.
+
+### Requirement 8: Observability and privacy
+
+**User Story:** As the operator, I want useful logs and metrics without leaking data.
+
+#### Acceptance Criteria
+
+1. EVERY function SHALL log structured JSON with Powertools Logger including
+   `requestId`, route, status and error code.
+2. THE analyses function SHALL emit metrics `AnalysisLatencyMs`, `CandidateCount`
+   and `AnalysisFailed` (by error code) with Powertools Metrics (EMF).
+3. NO function SHALL log image bytes, base64, presigned URLs, POST fields or raw model
+   text.
+
+### Requirement 9: Tests
+
+**User Story:** As the reviewer, I want each criterion proven against real behavior.
+
+#### Acceptance Criteria
+
+1. EVERY pure service SHALL have Vitest unit tests with `aws-sdk-client-mock`,
+   covering each error path of Requirements 2, 3, 4 and 5.
+2. THE `e2e/api` Playwright project SHALL exercise every endpoint against `BASE_URL`,
+   validating every response with the contract schemas, and clean up what it creates.
+3. THE analysis Playwright test SHALL be tagged `@bedrock` and use a fixture photo
+   from `e2e/fixtures/images/`.

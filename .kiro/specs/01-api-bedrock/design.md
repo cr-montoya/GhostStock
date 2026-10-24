@@ -1,159 +1,155 @@
-# Design: 01-api-bedrock
+# Design Document: 01-api-bedrock
 
-## Package structure
+## Overview
+
+Three Lambda functions, each a thin router over pure services. Contracts from
+`@ghoststock/contracts`; AWS access through small adapters so services are unit
+testable. ADRs: 0005 (single table), 0007 (Bedrock contract), 0010 (runtime
+dependencies).
+
+## Structure
 
 ```
 services/api/
-├── src/
-│   ├── handlers/
-│   │   ├── presign.ts          # GET /api/upload-url
-│   │   ├── analyze.ts          # POST /api/analyze
-│   │   ├── items-write.ts      # POST, PUT, DELETE /api/items
-│   │   ├── items-read.ts       # GET /api/items, GET /api/items/:id
-│   │   └── export.ts           # GET /api/items/export
-│   ├── bedrock/
-│   │   ├── client.ts           # BedrockRuntimeClient singleton
-│   │   ├── tools.ts            # tool definition built from productCandidatesJsonSchema
-│   │   ├── prompt.ts           # prompt text constant
-│   │   └── analyze.ts          # callBedrock() pure function
-│   ├── dynamo/
-│   │   ├── client.ts           # DynamoDBDocumentClient singleton
-│   │   └── items.ts            # putItem, getItem, queryItems, updateItem, deleteItem
-│   ├── s3/
-│   │   ├── client.ts           # S3Client singleton
-│   │   └── presign.ts          # createPresignedPost(), getImageMetadata()
-│   ├── csv/
-│   │   └── export.ts           # itemsToCsv() pure function
-│   └── lib/
-│       ├── ulid.ts             # generateUlid() wrapper
-│       ├── errors.ts           # AppError class, toApiError()
-│       └── response.ts         # ok(), err() API Gateway response helpers
-├── package.json
-└── tsconfig.json
+  src/
+    handlers/
+      uploads.ts        POST /api/uploads
+      analyses.ts       POST /api/analyses
+      inventory.ts      /api/products, /api/products/{id}, /api/settings (routeKey switch)
+    services/
+      uploads.ts        createUploadSlot()
+      analyses.ts       analyzeImage()
+      products.ts       createProducts(), listProducts(), getProduct(),
+                        updateProduct(), deleteProduct()
+      settings.ts       getSettings(), updateSettings()
+    adapters/
+      s3.ts             headImage(), getImageBytes(), copyToMedia(), presignPost()
+      dynamo.ts         keys, toItem(), fromItem(), query/put/update/delete helpers
+      bedrock.ts        converseWithTool() with retry and timeout
+    bedrock/
+      prompt.ts         SYSTEM_PROMPT, USER_PROMPT
+      tool.ts           REPORT_PRODUCTS_TOOL built from ModelOutputJsonSchema
+    lib/
+      http.ts           parseJson(), json(), noContent(), withErrors() wrapper
+      errors.ts         AppError(code, message, cause?)
+      env.ts            zod-validated process.env
+      observability.ts  Powertools logger and metrics
+      ids.ts            ulid()
+  test/                 Vitest unit tests
+  package.json, tsconfig.json
 ```
 
-## Handler contracts
+## Request flow
 
-### `GET /api/upload-url`
-Request: none  
-Response 200: `{ url: string; fields: Record<string, string>; key: string }`  
-Errors: `INTERNAL_ERROR`
-
-### `POST /api/analyze`
-Request body: `AnalyzeRequest` (`{ photoKey: string }`)  
-Response 200: `AnalyzeResponse` (`{ candidates: ProductCandidate[] }`)  
-Errors: `VALIDATION_ERROR`, `IMAGE_TOO_LARGE`, `UNSUPPORTED_TYPE`, `NO_CANDIDATES`,
-`ANALYSIS_FAILED`, `THROTTLED`, `INTERNAL_ERROR`
-
-### `POST /api/items`
-Request body: `SaveItemsRequest`  
-Response 201: `SaveItemsResponse`  
-Errors: `VALIDATION_ERROR`, `INTERNAL_ERROR`
-
-### `GET /api/items`
-Query: `?category=<ProductCategory>&sort=createdAt|name&order=asc|desc`  
-Response 200: `ListItemsResponse`  
-Errors: `VALIDATION_ERROR`, `INTERNAL_ERROR`
-
-### `GET /api/items/export`
-Query: `?category=<ProductCategory>`  
-Response 200: CSV, `Content-Type: text/csv; charset=utf-8`,
-`Content-Disposition: attachment; filename="inventario.csv"`
-
-### `GET /api/items/:id`
-Response 200: `InventoryItem`  
-Errors: `NOT_FOUND`, `INTERNAL_ERROR`
-
-### `PUT /api/items/:id`
-Request body: partial `ProductCandidate`  
-Response 200: `InventoryItem`  
-Errors: `VALIDATION_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`
-
-### `DELETE /api/items/:id`
-Response 204: empty  
-Errors: `NOT_FOUND`, `INTERNAL_ERROR`
-
-## Bedrock integration
-
-```typescript
-// bedrock/analyze.ts
-export async function callBedrock(
-  client: BedrockRuntimeClient,
-  imageBytes: Uint8Array,
-  mediaType: "image/jpeg" | "image/png" | "image/webp"
-): Promise<ProductCandidates | AppError>
+```mermaid
+sequenceDiagram
+  participant W as Web
+  participant U as uploads fn
+  participant S as S3 media
+  participant A as analyses fn
+  participant B as Bedrock
+  participant I as inventory fn
+  participant D as DynamoDB
+  W->>U: POST /api/uploads {contentType, sizeBytes}
+  U-->>W: 201 {url, fields, imageKey, expiresAt}
+  W->>S: POST url (fields + file)
+  W->>A: POST /api/analyses {imageKey}
+  A->>S: HeadObject + GetObject tmp/...
+  A->>B: Converse (image + forced report_products)
+  A-->>W: 200 Analysis (0..10 candidates)
+  W->>I: POST /api/products {imageKey, products}
+  I->>S: CopyObject tmp/ -> media/products/
+  I->>D: BatchWriteItem
+  I-->>W: 201 {products}
 ```
 
-1. Build the Converse request: image block + text prompt + tool config.
-2. Send. On `ThrottlingException`, retry ≤ 2 times (500 ms, 1000 ms back-off).
-3. Check `stopReason === "tool_use"`. If not → return `ANALYSIS_FAILED`.
-4. Extract the `toolUse` block. Parse `input` with `ProductCandidatesSchema.safeParse`.
-5. If parse fails → return `ANALYSIS_FAILED`.
-6. If `candidates.length === 0` → return `NO_CANDIDATES`.
-7. Return `{ candidates }`.
+## Handler contract
 
-## DynamoDB table design
-
-Table name: `GhostStockItems` (injected via `TABLE_NAME` env var).
-
-| Attribute | Type | Role |
-| --- | --- | --- |
-| `PK` | String | `ITEM#<ulid>` |
-| `category` | String | GSI partition key |
-| `createdAt` | String | GSI sort key (ISO-8601 sorts lexicographically) |
-| `name` | String | for name-sort (sort in memory for v1) |
-
-GSI: `CategoryCreatedAtIndex` — PK = `category`, SK = `createdAt`.
-
-## Environment variables
-
-| Name | Injected by | Used by |
-| --- | --- | --- |
-| `TABLE_NAME` | CDK | dynamo/items.ts |
-| `UPLOAD_BUCKET` | CDK | s3/presign.ts |
-| `BEDROCK_MODEL_ID` | CDK | bedrock/client.ts |
-| `AWS_REGION` | Lambda runtime | all AWS clients |
-
-## Error handling pattern
-
-```typescript
-// lib/errors.ts
-export class AppError extends Error {
-  constructor(public code: ErrorCode, message: string) { super(message); }
-}
-
-// handlers use:
-const result = await callBedrock(...)
-if (result instanceof AppError) return err(result);
-return ok(result);
+```ts
+export const handler = withErrors(async (event: APIGatewayProxyEventV2) => {
+  const body = parseJson(event, CreateAnalysisRequestSchema); // 400 on failure
+  const analysis = await analyzeImage(deps, body.imageKey);
+  return json(200, analysis);
+});
 ```
 
-## CSV format
+`withErrors` maps `AppError` to `ApiErrorSchema` with `ERROR_HTTP_STATUS`, logs once,
+adds `requestId` (`event.requestContext.requestId`), and turns anything else into
+`INTERNAL_ERROR`. Responses always set `content-type: application/json` and
+`cache-control: no-store`.
 
-Header row (Spanish): `id,nombre,descripcion,categoria,precio_estimado,moneda,cantidad,sku,codigo_barras,foto,creado_en`
+`inventory.ts` dispatches on `event.routeKey`:
+`GET /api/products`, `POST /api/products`, `GET /api/products/{id}`,
+`PUT /api/products/{id}`, `DELETE /api/products/{id}`, `GET /api/settings`,
+`PUT /api/settings`. Path `id` is validated with `Ulid`.
 
-Values are comma-separated; text fields quoted with `"` if they contain commas or
-newlines; encoding UTF-8 with BOM (`\uFEFF`) for Excel compatibility.
+## Uploads
 
-## Package configuration
+`createPresignedPost` (`@aws-sdk/s3-presigned-post`) with
+`Key = tmp/${ulid()}.${ext}`, `Fields: { "Content-Type": contentType }`,
+`Conditions: [["content-length-range", 1, MAX_UPLOAD_BYTES], ["eq", "$Content-Type",
+contentType]]`, `Expires: 300`. Extension map: jpeg -> jpg, png -> png, webp -> webp.
 
-```json
-{
-  "name": "@ghoststock/api",
-  "dependencies": {
-    "@ghoststock/contracts": "*",
-    "@aws-sdk/client-bedrock-runtime": "3.x",
-    "@aws-sdk/client-dynamodb": "3.x",
-    "@aws-sdk/lib-dynamodb": "3.x",
-    "@aws-sdk/client-s3": "3.x",
-    "@aws-sdk/s3-presigned-post": "3.x",
-    "ulid": "2.3.0"
-  },
-  "devDependencies": {
-    "aws-sdk-client-mock": "4.x",
-    "vitest": "2.1.8",
-    "typescript": "5.6.3",
-    "@types/aws-lambda": "8.10.x"
-  }
-}
-```
+## Analyses
+
+1. `HeadObject`: `NotFound` -> `IMAGE_NOT_FOUND`; `ContentLength > MAX_UPLOAD_BYTES`
+   -> `IMAGE_TOO_LARGE`; `ContentType` not allowed -> `UNSUPPORTED_MEDIA_TYPE`.
+2. `GetObject` -> `Body.transformToByteArray()`.
+3. `converseWithTool` with `toolChoice: { tool: { name: "report_products" } }`,
+   `temperature: 0`, `maxTokens: 2000`, `abortSignal` at 25 s.
+4. Retry policy and error mapping exactly as `ai-integration.md`.
+5. `ModelOutputSchema.safeParse(toolUse.input)`; map to `ProductCandidate` with
+   `candidateId: ulid()`.
+6. Emit metrics, log summary, return `Analysis`.
+
+## DynamoDB (ADR 0005)
+
+| Entity | PK | SK | Attributes |
+| --- | --- | --- | --- |
+| Product | `WS#default` | `PRODUCT#<ulid>` | `entity: "PRODUCT"` + every `Product` field |
+| Settings | `WS#default` | `SETTINGS` | `entity: "SETTINGS"`, `lowStockThreshold`, `updatedAt` |
+
+- List: `Query PK = :ws AND begins_with(SK, "PRODUCT#")`, `ScanIndexForward: false`
+  (ULIDs sort by time), follow `LastEvaluatedKey` up to 1 000 items.
+- Create: `BatchWriteItem` (max 10 items, retry unprocessed items up to 3 times; any
+  leftover -> `STORAGE_ERROR`).
+- Update: `UpdateItem` with `ConditionExpression attribute_exists(PK)`, expression
+  built from the validated partial with placeholders, `ReturnValues: ALL_NEW`.
+- Delete: `DeleteItem` with the same condition. `ConditionalCheckFailedException` ->
+  `NOT_FOUND`.
+- `fromItem` strips `PK`, `SK`, `entity` and parses with `ProductSchema`.
+- The shared photo is not deleted with a product (other products may use it).
+
+## Environment
+
+Validated with zod at cold start (`lib/env.ts`):
+
+| Name | Functions |
+| --- | --- |
+| `MEDIA_BUCKET` | all |
+| `TABLE_NAME` | inventory |
+| `BEDROCK_MODEL_ID` | analyses |
+| `LOW_STOCK_DEFAULT` | inventory |
+| `POWERTOOLS_SERVICE_NAME`, `POWERTOOLS_METRICS_NAMESPACE` (`GhostStock`), `LOG_LEVEL` | all |
+
+## Dependencies (ADR 0010)
+
+Runtime: `@ghoststock/contracts`, `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`,
+`@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb`,
+`@aws-sdk/client-bedrock-runtime`, `@aws-lambda-powertools/logger`,
+`@aws-lambda-powertools/metrics`, `ulid`. Dev: `@types/aws-lambda`,
+`aws-sdk-client-mock`, `vitest`, `typescript`. Bundled by CDK `NodejsFunction`
+(esbuild); this package has `build` = `tsc --noEmit` only.
+
+## Testing
+
+- Vitest unit tests per service with `aws-sdk-client-mock`: presign conditions,
+  every analysis outcome (empty, invalid tool input, wrong stop reason, throttled
+  then success, throttled exhausted, access denied, not found, too large, wrong
+  type), create with missing image, create with partial batch failure, update and
+  delete not found, settings default.
+- `withErrors` tests: envelope shape, status mapping, no stack in body.
+- Playwright `e2e/api/*.spec.ts` (project `api`, needs `BASE_URL`): uploads (valid,
+  415, 413), real S3 POST of the fixture photo, analysis `@bedrock`, products CRUD
+  round trip with cleanup, settings round trip, validation errors. Every body parsed
+  with the contract schemas.
