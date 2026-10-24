@@ -107,8 +107,11 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
    `temperature: 0`, `maxTokens: 2000`. The client is created with `maxAttempts: 1`;
    one `AbortController` deadline of 25 s spans every attempt and backoff (each call
    and sleep races the deadline), so the handler always answers with the envelope
-   before the 28 s Lambda timeout. A retry happens only if the backoff fits in the
-   time left.
+   before the 28 s Lambda timeout. The 25 s is one budget for the whole request:
+   it is capped at the Lambda remaining time minus 2 s, and the S3 time (client with
+   2 attempts, 1 s connect and 5 s request timeouts) is subtracted before Converse;
+   no time left -> `MODEL_THROTTLED` without calling Bedrock. A retry happens only if
+   the backoff fits in the time left. The Bedrock client uses region `us-east-1`.
 4. Retry policy and error mapping exactly as `ai-integration.md`. A
    `ValidationException` whose message does not mention the model, and any other
    unlisted Bedrock exception, -> `INTERNAL_ERROR`.
@@ -116,7 +119,8 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
    is parsed with `ModelOutputSchema.safeParse`; map to `ProductCandidate` with
    `candidateId: ulid()`. `latencyMs` spans the Converse call including retries.
 6. Emit `AnalysisLatencyMs` and `CandidateCount` on success, `AnalysisFailed` (single
-   metric, dimension `errorCode`) on failure; log the summary (`analysisId`,
+   metric, dimension `errorCode`) on failures after request validation (a 400 or a
+   configuration error is not an analysis failure); log the summary (`analysisId`,
    `imageKey`, `modelId`, `latencyMs`, `candidateCount`, `attempts`); return `Analysis`.
 
 ## DynamoDB (ADR 0005)
