@@ -22,7 +22,7 @@ export function SettingsPage() {
     return (
       <>
         {header}
-        <div aria-busy="true" aria-label={copy.common.loading} className="glass max-w-xl rounded-xl p-6">
+        <div role="status" aria-busy="true" aria-label={copy.common.loading} className="glass max-w-xl rounded-xl p-6">
           <Skeleton className="h-4 w-40" />
           <Skeleton className="mt-3 h-11 w-full" />
           <Skeleton className="mt-6 h-11 w-36" />

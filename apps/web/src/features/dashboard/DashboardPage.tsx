@@ -1,6 +1,6 @@
 import { computeInventoryStats } from "@ghoststock/contracts";
 import { Boxes, Coins, Layers, Package, ScanSearch } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useProducts, useSettings } from "@/api/queries";
 import { ErrorState } from "@/components/ErrorState";
 import { GhostEmptyState } from "@/components/brand/GhostEmptyState";
@@ -31,6 +31,8 @@ function InvokeButton() {
 export function DashboardPage() {
   const products = useProducts();
   const settings = useSettings();
+  // Arriving from a save: the KPIs glow with ectoplasm once while they count up.
+  const awakened = (useLocation().state as { awakened?: boolean } | null)?.awakened === true;
 
   const header = (
     <PageHeader
@@ -82,16 +84,17 @@ export function DashboardPage() {
     <>
       {header}
       <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-        <KpiCard label={copy.dashboard.kpis.products} value={stats.productCount} format={formatNumber} icon={Package} />
-        <KpiCard label={copy.dashboard.kpis.units} value={stats.unitCount} format={formatNumber} icon={Boxes} />
+        <KpiCard label={copy.dashboard.kpis.products} value={stats.productCount} format={formatNumber} icon={Package} awakened={awakened} />
+        <KpiCard label={copy.dashboard.kpis.units} value={stats.unitCount} format={formatNumber} icon={Boxes} awakened={awakened} />
         <KpiCard
           label={copy.dashboard.kpis.value}
           value={stats.inventoryValueCop}
           format={formatCop}
           icon={Coins}
           highlight
+          awakened={awakened}
         />
-        <KpiCard label={copy.dashboard.kpis.categories} value={stats.categoryCount} format={formatNumber} icon={Layers} />
+        <KpiCard label={copy.dashboard.kpis.categories} value={stats.categoryCount} format={formatNumber} icon={Layers} awakened={awakened} />
       </div>
 
       <div className="mt-4 grid gap-4 md:mt-6 lg:grid-cols-5">
@@ -153,7 +156,7 @@ export function DashboardPage() {
 
 function DashboardSkeleton() {
   return (
-    <div aria-busy="true" aria-label={copy.common.loading}>
+    <div role="status" aria-busy="true" aria-label={copy.common.loading}>
       <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="glass rounded-lg p-4 md:p-5">

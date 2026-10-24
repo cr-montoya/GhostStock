@@ -10,7 +10,7 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-violet text-white shadow-[0_0_0_1px_var(--border-strong),0_8px_24px_-8px_var(--violet-glow)] hover:shadow-[0_0_0_1px_var(--violet-soft),0_10px_32px_-6px_var(--violet-glow)] hover:brightness-110",
-        destructive: "bg-blood text-white hover:brightness-110",
+        destructive: "bg-blood text-bg font-semibold hover:brightness-110",
         outline: "border border-border-strong bg-surface/60 text-text hover:bg-surface-raised",
         secondary: "bg-surface-raised text-text hover:brightness-125",
         ghost: "text-text hover:bg-surface-raised",
