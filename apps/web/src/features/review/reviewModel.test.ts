@@ -16,6 +16,9 @@ describe("review model", () => {
     expect(parseInteger("18.900")).toBe(18_900);
     expect(parseInteger("1 200")).toBe(1_200);
     expect(parseInteger("12,5")).toBeUndefined();
+    expect(parseInteger("18.90")).toBeUndefined();
+    expect(parseInteger("1.2.3")).toBeUndefined();
+    expect(parseInteger("1 250 000")).toBe(1_250_000);
     expect(parseInteger("-3")).toBeUndefined();
     expect(parseInteger("abc")).toBeUndefined();
     expect(parseInteger("")).toBeUndefined();

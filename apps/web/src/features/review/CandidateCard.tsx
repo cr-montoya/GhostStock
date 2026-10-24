@@ -1,5 +1,6 @@
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@ghoststock/contracts";
 import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useRef } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Field } from "@/components/Field";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { copy } from "@/copy/es";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "./ConfidenceChip";
-import { riseItem, riseItemReduced } from "./motion";
+import { glowOnce, riseItem, riseItemReduced } from "./motion";
 import type { CandidateDraft, FieldErrors } from "./reviewModel";
 
 interface CandidateCardProps {
@@ -29,6 +30,22 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
   const label = copy.review.cardLabel(index + 1, total);
   const err = (field: keyof FieldErrors) => (errors?.[field] ? copy.review.fieldErrors[errors[field]] : undefined);
 
+  // Discard and restore swap the focused button out: hand focus to its counterpart.
+  const restoreRef = useRef<HTMLButtonElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const everDiscarded = useRef(false);
+  if (draft.discarded) everDiscarded.current = true;
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    (draft.discarded ? restoreRef : discardRef).current?.focus();
+  }, [draft.discarded]);
+  const toggleDiscard = (discarded: boolean) => {
+    toggled.current = true;
+    onChange({ discarded, selected: !discarded });
+  };
+
   if (draft.discarded) {
     return (
       <motion.article
@@ -45,7 +62,7 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
           </h3>
           <p className="truncate text-sm text-muted-foreground line-through">{draft.name}</p>
         </div>
-        <Button variant="outline" size="sm" className="h-11" onClick={() => onChange({ discarded: false, selected: true })}>
+        <Button ref={restoreRef} variant="outline" size="sm" className="h-11" disabled={disabled} onClick={() => toggleDiscard(false)}>
           <RotateCcw aria-hidden="true" />
           {copy.review.restore}
         </Button>
@@ -57,12 +74,21 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
     <motion.article
       key="active"
       variants={reduce ? riseItemReduced : riseItem}
+      // A restored card must not rise and glow a second time.
+      initial={everDiscarded.current ? false : undefined}
       aria-labelledby={headingId}
       className={cn(
         "glass relative overflow-hidden rounded-xl transition-[border-color,opacity] duration-150",
         draft.selected ? "border-violet-soft/25" : "opacity-70",
       )}
     >
+      {!reduce && (
+        <motion.span
+          aria-hidden="true"
+          variants={glowOnce}
+          className="pointer-events-none absolute inset-0 z-10 rounded-xl shadow-[0_0_48px_2px_var(--ectoplasm-glow),inset_0_0_0_1px_var(--ectoplasm-glow)]"
+        />
+      )}
       <div className="grid gap-0 md:grid-cols-[260px_1fr]">
         <div className="relative border-b border-border bg-bg md:border-b-0 md:border-r md:p-3">
           <img
@@ -150,7 +176,14 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
               <Checkbox checked={draft.selected} disabled={disabled} onCheckedChange={(checked) => onChange({ selected: checked === true })} />
               {copy.review.select}
             </label>
-            <Button variant="ghost" size="sm" className="h-11 text-muted-foreground hover:text-blood" disabled={disabled} onClick={() => onChange({ discarded: true, selected: false })}>
+            <Button
+              ref={discardRef}
+              variant="ghost"
+              size="sm"
+              className="h-11 text-muted-foreground hover:text-blood"
+              disabled={disabled}
+              onClick={() => toggleDiscard(true)}
+            >
               <Trash2 aria-hidden="true" />
               {copy.review.discard}
             </Button>
