@@ -1,0 +1,22 @@
+{
+  "app": "tsx bin/ghoststock.ts",
+  "watch": {
+    "include": [
+      "bin/**",
+      "lib/**"
+    ],
+    "exclude": [
+      "test/**",
+      "cdk.out/**"
+    ]
+  },
+  "context": {
+    "region": "us-east-1",
+    "repo": "cr-montoya/GhostStock",
+    "branch": "main",
+    "bedrockModelId": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "lowStockDefault": 5,
+    "enableTests": false,
+    "budgetUsd": 20
+  }
+}
