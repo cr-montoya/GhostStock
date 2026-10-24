@@ -14,7 +14,7 @@ import {
   type Product,
   type UpdateProductRequest,
 } from "@ghoststock/contracts";
-import { copyToMedia } from "../adapters/s3.js";
+import { copyToMedia, mediaKeyFor } from "../adapters/s3.js";
 import {
   PRODUCT_SK_PREFIX,
   WORKSPACE_PK,
@@ -49,11 +49,12 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
  * fails with `STORAGE_ERROR` (after a best-effort cleanup of what was written).
  */
 export async function createProducts(deps: ProductsDeps, request: CreateProductsRequest): Promise<Product[]> {
-  const mediaKey = await copyToMedia(deps.s3, deps.bucket, request.imageKey, ulid());
+  const mediaKey = mediaKeyFor(request.imageKey, ulid());
   const timestamp = (deps.now ?? (() => new Date()))().toISOString();
   const products = request.products.map((reviewed) =>
     ProductSchema.parse({ ...reviewed, id: ulid(), mediaKey, createdAt: timestamp, updatedAt: timestamp }),
   );
+  await copyToMedia(deps.s3, deps.bucket, request.imageKey, mediaKey);
 
   try {
     await batchWrite(deps, products.map((product) => ({ PutRequest: { Item: toItem(product) } })));
@@ -112,14 +113,13 @@ export async function listProducts(deps: ProductsDeps): Promise<ListProductsResp
 }
 
 export async function getProduct(deps: ProductsDeps, id: string): Promise<Product> {
-  let item: Record<string, unknown> | undefined;
   try {
-    item = (await deps.db.send(new GetCommand({ TableName: deps.table, Key: { PK: WORKSPACE_PK, SK: productSk(id) } }))).Item;
+    const item = (await deps.db.send(new GetCommand({ TableName: deps.table, Key: { PK: WORKSPACE_PK, SK: productSk(id) } }))).Item;
+    if (!item) throw new AppError("NOT_FOUND");
+    return fromItem(item);
   } catch (error) {
     throw storageError(error);
   }
-  if (!item) throw new AppError("NOT_FOUND");
-  return fromItem(item);
 }
 
 /** Updates only the given fields plus `updatedAt`, on an existing item, and returns it whole. */

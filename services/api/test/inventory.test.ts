@@ -140,6 +140,31 @@ describe("createProducts [01-api 4.1, 4.2, 4.3]", () => {
     expect(calls[4]!.args[0].input.RequestItems?.[TABLE]?.every((r) => r.DeleteRequest !== undefined)).toBe(true);
   });
 
+  it("rolls back every written product when the batch write throws", async () => {
+    s3Mock.on(CopyObjectCommand).resolves({});
+    dbMock.on(BatchWriteCommand).rejectsOnce(new Error("boom")).resolves({});
+    expect(await codeOf(createProducts(deps(), createProductsRequestFixture))).toBe("STORAGE_ERROR");
+    const [write, cleanup] = dbMock.commandCalls(BatchWriteCommand).map((c) => c.args[0].input.RequestItems?.[TABLE] ?? []);
+    const written = write!.map((r) => r.PutRequest?.Item?.SK);
+    expect(cleanup!.map((r) => r.DeleteRequest?.Key)).toEqual(written.map((SK) => ({ PK: "WS#default", SK })));
+  });
+
+  it("waits 100, 200 and 400 ms between unprocessed retries", async () => {
+    s3Mock.on(CopyObjectCommand).resolves({});
+    const leftover = { UnprocessedItems: { [TABLE]: [{ PutRequest: { Item: { PK: "x" } } }] } };
+    dbMock.on(BatchWriteCommand).resolvesOnce(leftover).resolvesOnce(leftover).resolvesOnce(leftover).resolvesOnce(leftover).resolves({});
+    const sleep = vi.fn(async () => undefined);
+    await codeOf(createProducts({ ...deps(), sleep }, createProductsRequestFixture));
+    expect(sleep.mock.calls.slice(0, 3)).toEqual([[100], [200], [400]]);
+  });
+
+  it("copies the photo to the media key the products carry", async () => {
+    s3Mock.on(CopyObjectCommand).resolves({});
+    dbMock.on(BatchWriteCommand).resolves({});
+    const [created] = await createProducts(deps(), createProductsRequestFixture);
+    expect(s3Mock.commandCalls(CopyObjectCommand)[0]!.args[0].input.Key).toBe(created!.mediaKey);
+  });
+
   it("returns STORAGE_ERROR when the batch write throws, even if cleanup also fails", async () => {
     s3Mock.on(CopyObjectCommand).resolves({});
     dbMock.on(BatchWriteCommand).rejects(new Error("ProvisionedThroughputExceeded"));
@@ -225,6 +250,15 @@ describe("get, update and delete [01-api 5.2, 5.3, 5.4]", () => {
     expect(input.UpdateExpression).toBe("SET #updatedAt = :updatedAt, #f0 = :v0");
     expect(input.ExpressionAttributeNames).toEqual({ "#updatedAt": "updatedAt", "#f0": "quantity" });
     expect(input.ExpressionAttributeValues).toEqual({ ":updatedAt": NOW.toISOString(), ":v0": 30 });
+  });
+
+  it("updates several fields with distinct placeholders and updatedAt once", async () => {
+    dbMock.on(UpdateCommand).resolves({ Attributes: toItem({ ...product, name: "Nuevo", quantity: 2, sku: "AB-1" }) });
+    await updateProduct(deps(), product.id, { name: "Nuevo", quantity: 2, sku: "AB-1" });
+    const input = dbMock.commandCalls(UpdateCommand)[0]!.args[0].input;
+    expect(input.UpdateExpression).toBe("SET #updatedAt = :updatedAt, #f0 = :v0, #f1 = :v1, #f2 = :v2");
+    expect(input.ExpressionAttributeNames).toEqual({ "#updatedAt": "updatedAt", "#f0": "name", "#f1": "quantity", "#f2": "sku" });
+    expect(input.ExpressionAttributeValues).toEqual({ ":updatedAt": NOW.toISOString(), ":v0": "Nuevo", ":v1": 2, ":v2": "AB-1" });
   });
 
   it("returns NOT_FOUND when updating a missing product", async () => {
@@ -383,6 +417,69 @@ describe("inventory router [01-api 4 to 7]", () => {
     expect(res.statusCode).toBe(404);
     expect(errorCode(res)).toBe("NOT_FOUND");
     expect(dbMock.calls()).toHaveLength(0);
+  });
+
+  it("POST /api/products returns 404 IMAGE_NOT_FOUND in the envelope and writes nothing", async () => {
+    s3Mock.on(CopyObjectCommand).rejects(new NoSuchKey({ message: "missing", $metadata: {} }));
+    const res = await call("POST /api/products", { body: createProductsRequestFixture });
+    expect(res.statusCode).toBe(404);
+    expect(errorCode(res)).toBe("IMAGE_NOT_FOUND");
+    expect(dbMock.calls()).toHaveLength(0);
+  });
+
+  it.each(["media/products/01JB5X7Q8M0000000000000900.jpg", "tmp/../x.jpg", "tmp/01JB5X7Q8M0000000000000900.gif"])(
+    "POST /api/products rejects imageKey %s before any AWS call",
+    async (imageKey) => {
+      const res = await call("POST /api/products", { body: { ...createProductsRequestFixture, imageKey } });
+      expect(errorCode(res)).toBe("VALIDATION_ERROR");
+      expect(s3Mock.calls()).toHaveLength(0);
+      expect(dbMock.calls()).toHaveLength(0);
+    },
+  );
+
+  it("POST /api/products returns 500 STORAGE_ERROR and no products when the batch write fails", async () => {
+    s3Mock.on(CopyObjectCommand).resolves({});
+    dbMock.on(BatchWriteCommand).rejects(new Error("boom"));
+    const res = await call("POST /api/products", { body: createProductsRequestFixture });
+    expect(res.statusCode).toBe(500);
+    expect(errorCode(res)).toBe("STORAGE_ERROR");
+    expect(JSON.parse(res.body as string)).not.toHaveProperty("products");
+  });
+
+  it("PUT /api/products/{id} returns 404 NOT_FOUND for a missing product", async () => {
+    dbMock.on(UpdateCommand).rejects(conditionFailed());
+    const res = await call("PUT /api/products/{id}", { id: ID, body: { quantity: 1 } });
+    expect(res.statusCode).toBe(404);
+    expect(errorCode(res)).toBe("NOT_FOUND");
+  });
+
+  it.each([
+    ["negative quantity", { quantity: -1 }],
+    ["mediaKey", { mediaKey: "media/products/01JB5X7Q8M0000000000000900.jpg" }],
+    ["id", { id: ID }],
+    ["createdAt", { createdAt: "2026-10-24T16:00:00.000Z" }],
+    ["updatedAt", { updatedAt: "2026-10-24T16:00:00.000Z" }],
+    ["table keys", { PK: "WS#other", quantity: 1 }],
+    ["ai fields", { aiConfidence: "high" }],
+  ])("PUT /api/products/{id} rejects %s before any AWS call", async (_name, body) => {
+    const res = await call("PUT /api/products/{id}", { id: ID, body });
+    expect(res.statusCode).toBe(400);
+    expect(errorCode(res)).toBe("VALIDATION_ERROR");
+    expect(dbMock.calls()).toHaveLength(0);
+  });
+
+  it("PUT /api/settings rejects an invalid body before any AWS call", async () => {
+    const res = await call("PUT /api/settings", { body: { lowStockThreshold: 1.5 } });
+    expect(errorCode(res)).toBe("VALIDATION_ERROR");
+    expect(dbMock.calls()).toHaveLength(0);
+  });
+
+  it("maps a malformed stored item to INTERNAL_ERROR without leaking it", async () => {
+    dbMock.on(QueryCommand).resolves({ Items: [{ PK: "WS#default", SK: "PRODUCT#x", name: "SECRET-ITEM-DATA" }] });
+    const res = await call("GET /api/products");
+    expect(res.statusCode).toBe(500);
+    expect(errorCode(res)).toBe("INTERNAL_ERROR");
+    expect(res.body).not.toContain("SECRET-ITEM-DATA");
   });
 
   it("returns 500 STORAGE_ERROR in the envelope when DynamoDB fails", async () => {
