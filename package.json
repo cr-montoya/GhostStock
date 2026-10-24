@@ -2,21 +2,19 @@
   "name": "ghoststock",
   "version": "0.0.1",
   "private": true,
-  "workspaces": [
-    "packages/contracts",
-    "services/api",
-    "apps/web",
-    "infra"
-  ],
+  "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "preinstall": "node -e \"if(!/^pnpm\\//.test(process.env.npm_config_user_agent||'')){console.error('Use pnpm, not npm or yarn.');process.exit(1)}\"",
     "prepare": "git config core.hooksPath .agents/hooks/git"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
   },
   "devDependencies": {
-    "typescript": "5.6.3"
+    "typescript": "5.9.3"
   }
 }
