@@ -8,7 +8,7 @@ export const CreateUploadRequestSchema = z.strictObject({
 });
 
 export const CreateUploadResponseSchema = z.object({
-  url: z.url(),
+  url: z.httpUrl(),
   fields: z.record(z.string(), z.string()),
   imageKey: ImageKeySchema,
   expiresAt: IsoDateTime,
