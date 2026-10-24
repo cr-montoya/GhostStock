@@ -24,8 +24,9 @@ deterministic and strict about undeclared dependencies.
 - Internal dependencies use `"@ghoststock/contracts": "workspace:*"`.
 - Commands: `pnpm install --frozen-lockfile`, `pnpm build` and `pnpm test`
   (recursive, topological), `pnpm --filter <pkg> <script>`, `pnpm exec <bin>`.
-- CodeBuild steps start with `corepack enable` (bundled with Node.js 22); npm is never
-  invoked. A root `preinstall` guard fails any install not run by pnpm.
+- CodeBuild steps start with `corepack enable` (bundled with Node.js 22); our steps never
+  invoke npm (the self-mutation and asset steps that CDK Pipelines generates install the
+  pinned CDK CLI and `cdk-assets` with npm, see spec 03 design). A root `preinstall` guard fails any install not run by pnpm.
 - `NodejsFunction` uses `pnpm-lock.yaml` as `depsLockFilePath`.
 - Dependencies with install scripts (for example esbuild) are allowed explicitly in
   `pnpm-workspace.yaml` when they are first added.
