@@ -49,7 +49,9 @@ apps/web/
       handlers.ts         MSW handlers from @ghoststock/contracts fixtures
       scenarios.ts        scenario switch from ?scenario=
       browser.ts
-  vite.config.ts          dev server on 5173
+  vite.config.ts          dev server on 5173; serves the MSW worker in dev only;
+                          aliases @ghoststock/contracts to its src for dev and build
+  scripts/assert-no-msw.mjs  build step that fails if MSW reaches dist (11.2)
   components.json         shadcn config
 e2e/                      Playwright workspace (scaffold owned by this spec)
   package.json, playwright.config.ts, fixtures/images/, web/*.spec.ts, visual/*.spec.ts
@@ -139,6 +141,11 @@ spec files:
 | `visual` | `visual` | 1440x900 and Pixel 7, `toHaveScreenshot` |
 | `api` | `api` | `baseURL process.env.BASE_URL` |
 | `smoke` | `smoke` | `baseURL process.env.BASE_URL` |
+
+The `visual` project captures both viewports: each visual spec loops over
+`visual/viewports.ts` (1440x900 and Pixel 7) with `test.use` per describe block.
+`PW_CHANNEL` (for example `chrome`) optionally runs every project on an installed
+browser instead of the downloaded Chromium.
 
 `webServer` is defined as `process.env.BASE_URL ? undefined : { command: "pnpm --filter @ghoststock/web
 dev", url: "http://localhost:5173", reuseExistingServer: true }`, so

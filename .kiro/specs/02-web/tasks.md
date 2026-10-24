@@ -4,7 +4,7 @@ Branch: `feat/02-<slug>` per slice, worktree `../GhostStock-web`. Builder: `web-
 Evaluators: `visual-qa`, `qa-engineer`, `code-reviewer`. Requires 00 merged.
 Every UI slice ships with desktop and phone screenshots in its PR.
 
-- [ ] 1. Scaffold web and Playwright workspaces
+- [x] 1. Scaffold web and Playwright workspaces
   - Vite React TS app, Tailwind 4, shadcn init, router, providers, MSW bootstrap.
   - `e2e/` workspace with `playwright.config.ts` (all five projects, `webServer` only
     when `BASE_URL` is unset), scripts `test:web`, `test:visual`, `test:api`,
