@@ -1,70 +1,75 @@
+---
+inclusion: always
+---
+
 # Architecture
+
+Decisions and their reasons: #[[file:docs/adr/README.md]]
 
 ## Repository layout
 
-npm workspaces monorepo, TypeScript everywhere (ADR 0002).
+npm workspaces monorepo, TypeScript everywhere (ADR 0002). Node.js 22 (`.nvmrc`).
 
 ```
-apps/web/            React 18 + Vite + Tailwind CSS + shadcn/ui + Motion
-services/api/        AWS Lambda handlers + Bedrock + DynamoDB + S3
-packages/contracts/  zod schemas, TypeScript types, shared fixtures
-infra/               AWS CDK v2, self-mutating CDK Pipeline
+packages/contracts/  zod 4 schemas, inferred types, fixtures       spec 00-contracts
+services/api/        Lambda handlers, Bedrock, DynamoDB, S3        spec 01-api-bedrock
+apps/web/            React SPA (Vite, Tailwind, shadcn/ui, Motion) spec 02-web
+infra/               CDK v2 app: AppStack + self-mutating pipeline spec 03-infra-pipeline
+e2e/                 Playwright: web/ (02), api/ (01), smoke/ (03) ADR 0009
 ```
 
-Node.js 22 (pinned in `.nvmrc` and in the CodeBuild image).
-One `npm ci` installs everything; one `npx cdk synth` validates infra.
+## Runtime
 
-## Runtime architecture
-
-```
-Browser
-  └─ CloudFront (HTTPS, security headers)
-       ├─ /             → S3 origin (React SPA)
-       └─ /api/*        → API Gateway (HTTP API)
-                              └─ Lambda functions (Node.js 22, esbuild bundle)
-                                   ├─ POST /api/analyze   → Bedrock (Claude 3 Sonnet)
-                                   ├─ POST /api/items      → DynamoDB
-                                   ├─ GET  /api/items      → DynamoDB
-                                   ├─ GET  /api/items/:id  → DynamoDB
-                                   ├─ PUT  /api/items/:id  → DynamoDB
-                                   ├─ DELETE /api/items/:id→ DynamoDB
-                                   └─ GET  /api/items/export → DynamoDB → CSV
-                              └─ S3 (photo uploads via presigned POST)
+```mermaid
+flowchart LR
+  B[Browser] -->|HTTPS| CF[CloudFront]
+  CF -->|"/* (SPA, OAC)"| WB[(S3 web bucket)]
+  CF -->|"/media/* (OAC)"| MB[(S3 media bucket)]
+  CF -->|"/api/*"| API[API Gateway HTTP API]
+  B -->|presigned POST tmp/| MB
+  API --> U[uploads fn]
+  API --> A[analyses fn]
+  API --> I[inventory fn]
+  A -->|GetObject tmp/| MB
+  A -->|Converse + forced tool use| BR[Amazon Bedrock]
+  I -->|Copy tmp/ to media/products/| MB
+  I --> DDB[(DynamoDB single table)]
 ```
 
-## Key design decisions
+One origin for the user (ADR 0006): no CORS on the API, no API URL baked into the
+build, images served from the same domain.
 
-- **Contracts first.** `packages/contracts` owns every zod schema and TypeScript type
-  shared between the API and the web app. Neither side redefines a shape locally.
-- **Thin Lambda handlers.** Business logic lives in pure functions tested with Vitest
-  and `aws-sdk-client-mock`. Handlers only parse, validate, call, and serialize.
-- **Bedrock via Converse API.** Structured output uses forced tool use (tool_choice =
-  "any"). The response is validated with the zod schema from contracts; invalid or
-  empty is an explicit error state, never a fabricated success.
-- **Single-table DynamoDB.** PK = `ITEM#<ulid>`. GSIs for category and createdAt
-  queries (dashboard sorting, stats).
-- **Presigned POST for uploads.** The browser uploads directly to S3; the Lambda never
-  touches image bytes in transit. Presigned POST constrains content-type and
-  content-length-range.
-- **CDK Pipeline (self-mutating).** `infra/` defines the pipeline; merging to `main`
-  deploys automatically.
+## Endpoints (contracts in `packages/contracts`)
 
-## Spec lanes
-
-| Spec | Workspace path | Unblocked by |
+| Method | Path | Function |
 | --- | --- | --- |
-| `00-contracts` | `packages/contracts/` | — |
-| `01-api-bedrock` | `services/api/` | `00-contracts` merged |
-| `02-web` | `apps/web/` | `00-contracts` merged |
-| `03-infra-pipeline` | `infra/` | `00-contracts` merged |
+| POST | `/api/uploads` | uploads |
+| POST | `/api/analyses` | analyses |
+| GET, POST | `/api/products` | inventory |
+| GET, PUT, DELETE | `/api/products/{id}` | inventory |
+| GET, PUT | `/api/settings` | inventory |
 
-Specs 01, 02 and 03 run in parallel worktrees after contracts merge.
+CSV export and dashboard stats are computed in the browser from the product list
+(no extra Lambda, ADR 0005).
 
-## Test strategy
+## Key principles
 
-| Layer | Runner | Approach |
+- **Contracts first.** Every shape crossing a boundary lives in `packages/contracts`.
+  No workspace redefines one.
+- **Thin handlers.** Parse with zod, call a pure service, map to the error catalog.
+- **Honest AI.** Structured output via forced tool use, validated with zod; empty is
+  valid, invalid is an explicit error (ADR 0007).
+- **Single table.** `PK = WS#default`; every read is one Query (ADR 0005).
+- **One AppStack** plus the pipeline stack (ADR 0008). Every merge to `main` deploys.
+- **Managed and minimal.** No queues, containers, auth providers or extra services.
+
+## Spec lanes and ownership
+
+| Spec | Owns | Unblocked by |
 | --- | --- | --- |
-| `packages/contracts` | Vitest | schema round-trip, fixture validation |
-| `services/api` | Vitest | unit tests with `aws-sdk-client-mock`; handler integration tests with `@aws-sdk/client-lambda` against a local emulator if available |
-| `apps/web` | Vitest + Testing Library | component logic, critical flows; MSW handlers from contract examples |
-| `infra` | Vitest + `aws-cdk-lib/assertions` | snapshot + fine-grained assertions |
+| `00-contracts` | `packages/contracts/**` | nothing |
+| `01-api-bedrock` | `services/api/**`, `e2e/api/**` | 00 merged |
+| `02-web` | `apps/web/**`, `e2e/web/**` | 00 merged |
+| `03-infra-pipeline` | `infra/**`, `e2e/smoke/**`, `e2e/package.json`, `e2e/playwright.config.ts`, `docs/deployment.md`, `docs/architecture.md` | 00 merged |
+
+Root files (`package.json`, `.nvmrc`, `.gitignore`) change only in small harness PRs.
