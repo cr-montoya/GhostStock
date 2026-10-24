@@ -98,7 +98,7 @@ photos.
    optimized.
 2. THE distribution SHALL redirect HTTP to HTTPS, require TLS 1.2 or later, enable
    HTTP/2 and 3, and attach the response headers policy from `security.md`, with the
-   media bucket regional domain in `connect-src`.
+   media bucket host, in both the regional and the global S3 form, in `connect-src`.
 3. THE distribution SHALL NOT use distribution-wide custom error responses.
 
 ### Requirement 7: Frontend publishing

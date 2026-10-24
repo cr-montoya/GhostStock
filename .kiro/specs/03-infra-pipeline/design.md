@@ -45,11 +45,16 @@ flowchart LR
 ```
 
 ```ts
+// Local `cdk synth`, `cdk diff` and the tests run without deploy-time context, so a
+// missing connectionArn uses a placeholder and adds a warning annotation (a pipeline
+// deployed with it fails at its source stage; nothing else is affected).
+const connectionArn = cfg.connectionArn ?? PLACEHOLDER_CONNECTION_ARN;
+const source = pipelines.CodePipelineSource.connection(cfg.repo, cfg.branch, {
+  connectionArn,
+});
 const synth = new pipelines.ShellStep("Synth", {
-  input: pipelines.CodePipelineSource.connection(cfg.repo, cfg.branch, {
-    connectionArn: cfg.connectionArn!,
-  }),
-  env: { CONNECTION_ARN: cfg.connectionArn!, BUDGET_EMAIL: cfg.budgetEmail ?? "" },
+  input: source,
+  env: { CONNECTION_ARN: connectionArn, BUDGET_EMAIL: cfg.budgetEmail ?? "" },
   commands: [
     "npm ci",
     "npm run build",
@@ -65,22 +70,28 @@ const pipeline = new pipelines.CodePipeline(this, "Pipeline", {
 });
 const prod = new GhostStockAppStage(this, "Prod", { env, config: cfg });
 pipeline.addStage(prod, cfg.enableTests ? {
-  pre: [new pipelines.ShellStep("Test", { commands: [
-    "npm ci", "npm test",
+  pre: [new pipelines.ShellStep("Test", { input: source, commands: [
+    "npm ci", "npm run build", "npm test",
     "npx playwright install --with-deps chromium",
-    "npx playwright test -c e2e --project=web-desktop",
+    "npm run test:web -w @ghoststock/e2e -- --project=web-desktop",
   ]})],
   post: [new pipelines.ShellStep("Smoke", {
+    input: source,
     envFromCfnOutputs: { BASE_URL: prod.baseUrl },
-    commands: ["npm ci", "npx playwright install --with-deps chromium",
-               "npx playwright test -c e2e --project=smoke"],
+    commands: ["npm ci", "npm run build -w @ghoststock/contracts",
+               "npx playwright install --with-deps chromium",
+               "npm run test:smoke -w @ghoststock/e2e"],
   })],
 } : undefined);
 ```
 
 `NODE22_IMAGE`: the managed CodeBuild image whose runtime list includes Node.js 22,
 selected and pinned in task 2 (verified against the CodeBuild docs, not assumed).
-`connectionArn` is required only by the pipeline stack; the app stage never reads it.
+`connectionArn` is used only by the pipeline stack; the app stage never reads it.
+Every ShellStep gets `input: source` explicitly: the synth output only contains
+`infra/cdk.out`, and the test steps need the whole repository. `npm run build` runs
+before tests because contracts export `dist/` and `BucketDeployment` needs
+`apps/web/dist`.
 
 ## App stack
 
@@ -98,16 +109,26 @@ selected and pinned in task 2 (verified against the CodeBuild docs, not assumed)
 
 `ApiFunction` defaults: `runtime NODEJS_22_X`, `architecture ARM_64`,
 `bundling { minify: true, sourceMap: true, target: "node22", format: OutputFormat.ESM,
-mainFields: ["module", "main"] }`, `projectRoot` repo root, `depsLockFilePath`
-root `package-lock.json`, explicit `LogGroup` (14 days, DESTROY), Powertools env.
+mainFields: ["module", "main"], externalModules: [], banner: "import { createRequire }
+from 'module'; const require = createRequire(import.meta.url);" }`, `projectRoot` repo
+root, `depsLockFilePath` root `package-lock.json`, explicit `LogGroup` (14 days,
+DESTROY), Powertools env. `externalModules: []` bundles our pinned SDK clients
+(including `@aws-sdk/s3-presigned-post`, which the runtime does not ship) instead of
+relying on the runtime's SDK; the banner lets CommonJS dependencies `require` inside
+the ESM bundle.
 
 IAM per function (explicit `PolicyStatement`s, no broad grants):
 - uploads: `s3:PutObject` on `${mediaBucket.bucketArn}/tmp/*`.
-- analyses: `s3:GetObject` on `.../tmp/*`; `bedrock:InvokeModel` on
+- analyses: `s3:GetObject` on `.../tmp/*`; `s3:ListBucket` on the bucket ARN with
+  `StringLike s3:prefix tmp/*`; `bedrock:InvokeModel` on
   `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}` and
   `arn:aws:bedrock:*::foundation-model/${modelId without the "us." prefix}`.
 - inventory: DynamoDB actions from `security.md` on the table ARN; `s3:GetObject` on
-  `.../tmp/*`; `s3:PutObject` on `.../media/products/*`.
+  `.../tmp/*`; `s3:ListBucket` with the same `tmp/*` prefix condition; `s3:PutObject`
+  on `.../media/products/*`.
+
+`s3:ListBucket` makes S3 return 404 (not 403) for a missing key, which is how
+`IMAGE_NOT_FOUND` is detected.
 
 ## Distribution (ADR 0006)
 
@@ -157,8 +178,10 @@ key; `tmp/` objects are never addressable through the distribution.
 Vitest with `Template.fromStack`, context `aws:cdk:bundling-stacks: []` to skip
 esbuild in tests. Assertions: bucket hardening and lifecycle and CORS; table keys and
 PITR; each function runtime, architecture, timeout, memory, concurrency, env; each
-role policy matches the IAM table exactly; HTTP API routes, throttling, no CORS;
+role policy matches the IAM table exactly, including the `s3:ListBucket` prefix
+condition; `ApiFunction` bundling has `externalModules: []` and the ESM banner;
+missing `connectionArn` synthesizes with a warning; HTTP API routes, throttling, no CORS;
 distribution behaviors, OAC, function association, no custom error responses; CSP
 contains the media bucket domain; `BucketDeployment` with invalidation; budget only
 when email given; pipeline `selfMutation`, synth env vars, test steps only when
-`enableTests`; config validation errors; `Annotations` has no cdk-nag errors.
+`enableTests`, each with the source as input; config validation errors; `Annotations` has no cdk-nag errors.
