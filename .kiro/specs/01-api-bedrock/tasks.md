@@ -19,13 +19,13 @@ The commit that creates `services/api/package.json` carries
   - Unit tests: conditions, key format, 415, 413.
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 3. Bedrock adapter
+- [x] 3. Bedrock adapter
   - `bedrock/prompt.ts`, `bedrock/tool.ts`, `adapters/bedrock.ts` with retry policy,
     25 s abort and error mapping.
   - Unit tests: every exception class maps to the right code; retry counts.
   - _Requirements: 3.3, 3.4, 3.5_
 
-- [ ] 4. Analyses
+- [x] 4. Analyses
   - `services/analyses.ts`, `handlers/analyses.ts`, metrics.
   - Unit tests: empty result, invalid output, wrong stop reason, missing image, too
     large, wrong type, happy path with candidate ids.
