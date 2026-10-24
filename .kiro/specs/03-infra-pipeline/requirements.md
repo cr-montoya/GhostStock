@@ -95,9 +95,12 @@ photos.
    bucket through OAC with a CloudFront Function rewriting extensionless paths to
    `/index.html`; `/api/*` to the HTTP API with caching disabled, all methods, and all
    viewer headers except Host; `/media/*` to the media bucket through OAC with caching
-   optimized.
-2. THE distribution SHALL redirect HTTP to HTTPS, enable HTTP/2 and 3, and attach the
-   response headers policy from `security.md`, with the media bucket host, in both the regional and the global S3 form, in `connect-src`.
+   optimized; CloudFront SHALL be allowed to read only `media/products/*` from the media
+   bucket.
+2. THE distribution SHALL redirect HTTP to HTTPS for the SPA and media, reject HTTP on
+   `/api/*` (a redirect would drop a POST body), enable HTTP/2 and 3, and attach the
+   response headers policy from `security.md`, with the media bucket host, in both the
+   regional and the global S3 form, in `connect-src`.
 3. THE distribution SHALL NOT use distribution-wide custom error responses.
 4. WHERE a custom domain certificate is configured, THE distribution SHALL require TLS
    1.2 or later. (The default `*.cloudfront.net` certificate fixes the viewer TLS
@@ -122,6 +125,8 @@ every deploy.
 
 1. WHERE `budgetEmail` is provided, THE app stack SHALL create a monthly AWS Budgets
    cost budget of `budgetUsd` with email notifications at 80% and 100% of actual cost.
+2. IF `budgetEmail` is missing, THEN synth SHALL emit a warning that no cost alert will
+   be created.
 
 ### Requirement 9: Compliance checks
 

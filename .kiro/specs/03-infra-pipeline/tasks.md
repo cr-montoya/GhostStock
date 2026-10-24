@@ -7,7 +7,8 @@ synth also needs the handler stubs from 01 task 1 and the web scaffold from 02 t
 go-ahead.
 
 - [x] 1. Scaffold the infra workspace
-  - `package.json` (aws-cdk-lib, constructs, cdk-nag, esbuild, aws-cdk, vitest),
+  - `package.json` (aws-cdk-lib, constructs, cdk-nag, aws-cdk, tsx, vitest; esbuild
+    as a root devDependency),
     `cdk.json` with non-sensitive context, `bin/ghoststock.ts`, `lib/config.ts`.
   - Commit carries `ADR-EXEMPT: infra dependencies recorded in ADR 0008`.
   - Tests: invalid config fails synth with a clear message.
@@ -40,7 +41,7 @@ go-ahead.
 - [x] 6. Budget and cdk-nag
   - `CfnBudget` when email is present; `nag.ts` suppressions with reasons.
   - Tests: budget conditional; zero unsuppressed nag errors.
-  - _Requirements: 8.1, 9.1, 9.2, 9.3_
+  - _Requirements: 8.1, 8.2, 9.1, 9.2, 9.3_
 
 - [x] 7. Deployment documentation
   - `docs/deployment.md` and `docs/architecture.md` per Requirement 11.
