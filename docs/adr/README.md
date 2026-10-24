@@ -17,3 +17,4 @@ The `commit-msg` gate enforces ADRs for architecture-signal commits (see 0001).
 | [0009](0009-playwright-acceptance-tests.md) | Playwright for acceptance tests, Vitest for units | accepted |
 | [0010](0010-api-runtime-dependencies.md) | API runtime dependencies | accepted |
 | [0011](0011-pnpm-workspaces.md) | pnpm is the only package manager (workspaces, corepack, `workspace:*`) | accepted |
+| [0012](0012-default-model-amazon-nova-pro.md) | Default Bedrock model is Amazon Nova Pro (no Anthropic form needed) | accepted |

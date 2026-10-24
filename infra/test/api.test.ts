@@ -65,7 +65,7 @@ describe("functions", () => {
 
   it("[03-infra-pipeline 5.1] env carries model id, table and low stock default", () => {
     expect(fn("analyses").Environment.Variables.BEDROCK_MODEL_ID).toBe(
-      "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "us.amazon.nova-pro-v1:0",
     );
     expect(fn("inventory").Environment.Variables).toMatchObject({
       TABLE_NAME: expect.anything(),
@@ -114,13 +114,13 @@ describe("functions", () => {
     expect(resolve(get.Resource)).toMatch(/\/tmp\/\*/);
     const list = s.find((x) => x.Action === "s3:ListBucket")!;
     expect(list.Condition).toEqual({ StringLike: { "s3:prefix": "tmp/*" } });
-    const profileArn = `arn:aws:bedrock:us-east-1:${TEST_ACCOUNT}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0`;
+    const profileArn = `arn:aws:bedrock:us-east-1:${TEST_ACCOUNT}:inference-profile/us.amazon.nova-pro-v1:0`;
     const bedrock = s.filter((x) => x.Action === "bedrock:InvokeModel");
     expect(bedrock.map((x) => ({ resource: resolve(x.Resource), condition: x.Condition }))).toEqual(
       expect.arrayContaining([
         { resource: JSON.stringify(profileArn), condition: undefined },
         {
-          resource: JSON.stringify("arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"),
+          resource: JSON.stringify("arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0"),
           // Only through the inference profile, never as a direct model call.
           condition: { StringEquals: { "bedrock:InferenceProfileArn": profileArn } },
         },
