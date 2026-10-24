@@ -22,7 +22,7 @@ describe("createUploadSlot [01-api 1.1]", () => {
 
     CreateUploadResponseSchema.parse(slot);
     const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[contentType];
-    expect(slot.imageKey).toMatch(new RegExp(`^tmp/[0-9A-HJKMNP-TV-Z]{26}\.${ext}$`));
+    expect(slot.imageKey).toMatch(new RegExp(String.raw`^tmp/[0-9A-HJKMNP-TV-Z]{26}\.${ext}$`));
     expect(ImageKeySchema.safeParse(slot.imageKey).success).toBe(true);
     expect(slot.expiresAt).toBe("2026-10-24T15:05:00.000Z");
     expect(new URL(slot.url).protocol).toBe("https:");
@@ -103,9 +103,59 @@ describe("POST /api/uploads handler [01-api 1.1, 1.2, 1.3, 7.1]", () => {
     expect(errorCode(res)).toBe("VALIDATION_ERROR");
   });
 
-  it("validates the body before reading configuration or signing", async () => {
+  it.each([
+    ["both type and size invalid", { contentType: "image/gif", sizeBytes: MAX_UPLOAD_BYTES + 1 }],
+    ["image/jpg", { contentType: "image/jpg", sizeBytes: 10 }],
+    ["upper case", { contentType: "IMAGE/PNG", sizeBytes: 10 }],
+    ["svg", { contentType: "image/svg+xml", sizeBytes: 10 }],
+    ["empty type", { contentType: "", sizeBytes: 10 }],
+    ["missing type", { sizeBytes: 10 }],
+  ])("returns 415 for %s (content type wins)", async (_name, body) => {
+    const res = await post(body);
+    expect(res.statusCode).toBe(415);
+    expect(errorCode(res)).toBe("UNSUPPORTED_MEDIA_TYPE");
+  });
+
+  it("returns 413 for a very large size", async () => {
+    expect(errorCode(await post({ contentType: "image/png", sizeBytes: 1e12 }))).toBe("IMAGE_TOO_LARGE");
+  });
+
+  it.each([
+    ["negative size", { contentType: "image/png", sizeBytes: -1 }],
+    ["string size", { contentType: "image/png", sizeBytes: "100" }],
+  ])("returns 400 for %s", async (_name, body) => {
+    expect(errorCode(await post(body))).toBe("VALIDATION_ERROR");
+  });
+
+  it.each([
+    ["not json", "not json"],
+    ["no body", undefined],
+  ])("returns 400 for %s", async (_name, body) => {
+    const res = await handler(apiEvent({ routeKey: "POST /api/uploads", body }), lambdaContext);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("expiresAt matches the signed policy expiration", async () => {
+    const slot = await createUploadSlot({ s3, bucket: BUCKET }, { contentType: "image/png", sizeBytes: 10 });
+    expect(Math.abs(Date.parse(slot.expiresAt) - Date.parse(policyOf(slot.fields).expiration))).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe("POST /api/uploads configuration", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("validates the body before reading configuration, then fails closed without leaking it", async () => {
+    vi.resetModules();
     vi.stubEnv("MEDIA_BUCKET", "");
-    const bad = await post({ contentType: "image/gif", sizeBytes: 1 });
-    expect(bad.statusCode).toBe(415);
+    const fresh = (await import("../src/handlers/uploads.js")).handler;
+    const send = (body: unknown) =>
+      fresh(apiEvent({ routeKey: "POST /api/uploads", body: JSON.stringify(body) }), lambdaContext);
+
+    expect((await send({ contentType: "image/gif", sizeBytes: 1 })).statusCode).toBe(415);
+    const res = await send({ contentType: "image/png", sizeBytes: 1 });
+    expect(res.statusCode).toBe(500);
+    const body = ApiErrorSchema.parse(JSON.parse(res.body as string));
+    expect(body.error).toMatchObject({ code: "INTERNAL_ERROR", message: "Unexpected error" });
+    expect(res.body).not.toContain("MEDIA_BUCKET");
   });
 });
