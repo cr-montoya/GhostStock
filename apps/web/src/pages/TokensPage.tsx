@@ -1,6 +1,5 @@
 import { ScanSearch } from "lucide-react";
 import { GhostEmptyState } from "@/components/brand/GhostEmptyState";
-import { Logo } from "@/components/brand/Logo";
 import { Field } from "@/components/Field";
 import { PageHeader } from "@/components/PageHeader";
 import { ProductPhoto } from "@/components/ProductPhoto";
@@ -38,8 +37,7 @@ const SCALE = [
 /** Dev-only showcase of the design system, captured by the visual baseline (task 2). */
 export function TokensPage() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 md:px-10">
-      <Logo className="mb-10" />
+    <div>
       <PageHeader eyebrow={copy.showcase.eyebrow} title={copy.showcase.title} description={copy.showcase.description} />
 
       <section aria-labelledby="palette" className="mb-12">
@@ -110,6 +108,6 @@ export function TokensPage() {
           <GhostEmptyState title={copy.showcase.emptyTitle} action={<Button>{copy.cta.invoke}</Button>} />
         </div>
       </section>
-    </main>
+    </div>
   );
 }
