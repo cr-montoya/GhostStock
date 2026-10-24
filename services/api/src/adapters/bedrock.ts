@@ -15,6 +15,8 @@ export const RETRY_DELAYS_MS = [400, 1200] as const;
 
 const RETRYABLE = new Set(["ThrottlingException", "ServiceUnavailableException"]);
 const UNAVAILABLE = new Set(["AccessDeniedException", "ResourceNotFoundException"]);
+// A ValidationException about the photo itself: the user should try another one.
+const IMAGE_PROBLEM = /image|format|dimension|decode|could not process/i;
 
 /** Retries are ours only: the SDK must not add its own on top (req 3.5). */
 export function createBedrockClient(): BedrockRuntimeClient {
@@ -96,15 +98,22 @@ export async function converseWithTool(deps: ConverseDeps, image: ConverseImage)
   }
 }
 
-/** Maps a Bedrock SDK exception to the contract error code (ai-integration.md). */
+/**
+ * Maps a Bedrock SDK exception to the contract error code (ai-integration.md, req 3.4).
+ * A ValidationException about the model or access is checked before the image rule.
+ * Any other one is INTERNAL_ERROR; its Bedrock message is logged, never image bytes.
+ */
 export function mapBedrockError(error: unknown): AppError {
   const name = error instanceof Error ? error.name : "";
   const message = error instanceof Error ? error.message : "";
   if (RETRYABLE.has(name) || name === "ModelTimeoutException" || name === "AbortError") {
     return new AppError("MODEL_THROTTLED", undefined, error);
   }
-  if (UNAVAILABLE.has(name) || (name === "ValidationException" && /model/i.test(message))) {
+  if (UNAVAILABLE.has(name) || (name === "ValidationException" && /model|access/i.test(message))) {
     return new AppError("MODEL_UNAVAILABLE", undefined, error);
+  }
+  if (name === "ValidationException" && IMAGE_PROBLEM.test(message)) {
+    return new AppError("UNSUPPORTED_MEDIA_TYPE", "Image could not be processed", error);
   }
   return new AppError("INTERNAL_ERROR", undefined, error);
 }

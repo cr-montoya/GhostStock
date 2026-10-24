@@ -190,6 +190,28 @@ describe("converseWithTool [01-api 3.3, 3.4, 3.5]", () => {
 });
 
 describe("mapBedrockError", () => {
+  it.each([
+    ["The provided model identifier is invalid.", "MODEL_UNAVAILABLE"],
+    ["You don't have access to the model with the specified model ID.", "MODEL_UNAVAILABLE"],
+    ["Could not process image", "UNSUPPORTED_MEDIA_TYPE"],
+    ["The provided image does not match the specified format", "UNSUPPORTED_MEDIA_TYPE"],
+    ["Image exceeds max dimensions", "UNSUPPORTED_MEDIA_TYPE"],
+    ["Unable to decode the provided bytes", "UNSUPPORTED_MEDIA_TYPE"],
+    ["Malformed input request: toolConfig is invalid", "INTERNAL_ERROR"],
+  ])("maps ValidationException %j to %s", (message, code) => {
+    const error = new ValidationException({ message, ...meta });
+    const mapped = mapBedrockError(error);
+    expect(mapped.code).toBe(code);
+    expect(mapped.cause).toBe(error);
+  });
+
+  it("answers 415 through converseWithTool for an image the model cannot process, without retry", async () => {
+    bedrock.on(ConverseCommand).rejects(new ValidationException({ message: "Could not process image", ...meta }));
+    expect(await codeOf(converseWithTool({ client, modelId: MODEL_ID, ...fakeTime() }, image))).toBe("UNSUPPORTED_MEDIA_TYPE");
+    expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(1);
+  });
+
+
   it("keeps the cause and maps unknown failures to INTERNAL_ERROR", () => {
     const cause = new InternalServerException({ message: "boom", ...meta });
     const mapped = mapBedrockError(cause);
@@ -197,8 +219,6 @@ describe("mapBedrockError", () => {
     expect(mapped.cause).toBe(cause);
     expect(mapBedrockError(new ValidationException({ message: "bad request shape", ...meta })).code).toBe("INTERNAL_ERROR");
     expect(mapBedrockError("x").code).toBe("INTERNAL_ERROR");
-    const imageError = new ValidationException({ message: "The provided image could not be processed.", ...meta });
-    expect(mapBedrockError(imageError).code).toBe("INTERNAL_ERROR");
   });
 
   it("maps an abort to MODEL_THROTTLED", () => {
