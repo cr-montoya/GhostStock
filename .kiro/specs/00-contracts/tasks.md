@@ -1,44 +1,52 @@
-# Tasks: 00-contracts
+# Implementation Plan: 00-contracts
 
-## Implementation tasks
+Branch: `feat/00-contracts`. Builder: main session or `api-dev`. Evaluators:
+`code-reviewer`, `qa-engineer`. One commit per task.
 
-- [ ] 1. Scaffold `packages/contracts` workspace
-  - [ ] 1.1 Create `packages/contracts/package.json` with name `@ghoststock/contracts`, dependencies `zod@3.23.8`, devDependencies `zod-to-json-schema@3.23.1`, `vitest@2.1.8`, `typescript@5.6.3`
-  - [ ] 1.2 Create `packages/contracts/tsconfig.json` with strict mode, NodeNext module, declaration output to `dist/`
-  - [ ] 1.3 Add `packages/contracts` to the root `package.json` workspaces array (create root `package.json` if it does not exist)
+- [ ] 1. Scaffold the workspace
+  - Create `packages/contracts/package.json`, `tsconfig.json`, `src/index.ts`,
+    Vitest config; install `zod@4`, `typescript`, `vitest`; commit the lockfile.
+  - Done when `npm run build -w @ghoststock/contracts` exits 0 on an empty barrel.
+  - _Requirements: 11.1, 11.2_
 
-- [ ] 2. Write product schemas (`src/schemas/product.ts`)
-  - [ ] 2.1 Export `PRODUCT_CATEGORIES` const tuple (10 categories)
-  - [ ] 2.2 Export `ProductCategory` type
-  - [ ] 2.3 Export `ProductCandidateSchema` zod object
-  - [ ] 2.4 Export `ProductCandidatesSchema` zod object (1–5 candidates)
+- [ ] 2. Common primitives
+  - `schemas/common.ts`: categories, labels, Ulid, IsoDateTime, content types,
+    confidence, key schemas, `MAX_UPLOAD_BYTES`.
+  - Tests: key schemas accept valid keys and reject traversal, prefixes, lowercase.
+  - _Requirements: 7.1, 7.2, 7.3, 8.4_
 
-- [ ] 3. Write inventory item schema (`src/schemas/item.ts`)
-  - [ ] 3.1 Export `InventoryItemSchema` extending `ProductCandidateSchema` with id, photoKey, createdAt, updatedAt
+- [ ] 3. Error catalog
+  - `schemas/errors.ts` with codes, HTTP map, retryable map, `ApiErrorSchema`.
+  - Tests: maps are total over `ERROR_CODES`.
+  - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 4. Write API schemas (`src/schemas/api.ts`)
-  - [ ] 4.1 Export `ErrorCode` enum (8 codes)
-  - [ ] 4.2 Export `ApiErrorSchema`
-  - [ ] 4.3 Export all request/response schemas (Analyze, SaveItems, ListItems, ExportQuery)
+- [ ] 4. Model output and analysis contracts
+  - `schemas/analysis.ts` including `ModelOutputJsonSchema` via `z.toJSONSchema`.
+  - Tests: forbidden keys rejected; empty `products` accepted; JSON schema has no
+    `$schema` and no price, quantity, sku or barcode properties.
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1, 3.2, 3.3_
 
-- [ ] 5. Write Bedrock JSON Schema export (`src/schemas/bedrock.ts`)
-  - [ ] 5.1 Export `productCandidatesJsonSchema` derived from `ProductCandidatesSchema` via `zod-to-json-schema`
+- [ ] 5. Upload, product and settings contracts
+  - `schemas/upload.ts`, `schemas/product.ts`, `schemas/settings.ts`.
+  - Tests: bounds on quantity, price, SKU pattern, size limit; empty update rejected.
+  - _Requirements: 2.1, 2.2, 2.3, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1_
 
-- [ ] 6. Write TypeScript type exports (`src/types/index.ts`)
-  - [ ] 6.1 Export inferred types: `ProductCandidate`, `ProductCandidates`, `InventoryItem`, `AnalyzeRequest`, `AnalyzeResponse`, `SaveItemsRequest`, `SaveItemsResponse`, `ListItemsResponse`, `ExportQuery`, `ApiError`
+- [ ] 6. Infra config schema
+  - `schemas/config.ts` with optional deploy-time values.
+  - _Requirements: 10.1_
 
-- [ ] 7. Write shared fixtures (`src/fixtures/index.ts`)
-  - [ ] 7.1 Export `sampleCandidate: ProductCandidate` — valid, all required fields
-  - [ ] 7.2 Export `sampleItem: InventoryItem` — valid, all required fields including id, photoKey, timestamps
+- [ ] 7. Domain helpers
+  - `domain/stats.ts`, `domain/csv.ts`.
+  - Tests: exact stats for `productsFixture`; CSV BOM, header, quoting, formula guard.
+  - _Requirements: 8.1, 8.2, 8.3_
 
-- [ ] 8. Write barrel export (`src/index.ts`)
-  - [ ] 8.1 Re-export everything from all schema, type, and fixture modules
+- [ ] 8. Fixtures and types
+  - `fixtures/index.ts` (every payload and every error code), `types.ts`, barrel.
+  - Tests: every fixture parses against its schema.
+  - _Requirements: 9.1, 9.2_
 
-- [ ] 9. Write tests
-  - [ ] 9.1 `src/__tests__/schemas.test.ts` — parse/serialize round-trip for all schemas
-  - [ ] 9.2 `src/__tests__/bedrock.test.ts` — validate `productCandidatesJsonSchema` shape
-  - [ ] 9.3 `src/__tests__/fixtures.test.ts` — `sampleCandidate` and `sampleItem` parse cleanly
-
-- [ ] 10. Build and verify
-  - [ ] 10.1 `npm run build` in `packages/contracts` exits 0 with no TypeScript errors
-  - [ ] 10.2 `npm test` in `packages/contracts` exits 0 with all tests passing
+- [ ] 9. Verify and document
+  - `npm run build`, `npm test`, `npm run typecheck` in the workspace, all green.
+  - Create `docs/api.md` with every endpoint and its example payloads taken from the
+    fixtures; link it from `docs/README.md`.
+  - _Requirements: 11.3_
