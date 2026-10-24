@@ -41,6 +41,7 @@ test("[02 5.4] save stays disabled until every selected card is valid, and shows
   await expect(save).toBeDisabled();
   await page.getByRole("button", { name: "Ver pendientes" }).click();
   await expect(card(page, 1).getByText("Este campo es obligatorio.").first()).toBeVisible();
+  await expect(card(page, 1).getByLabel("Cantidad")).toBeFocused();
   await fill(page, 1, "24", "18.900");
   await fill(page, 2, "40", "4200");
   await expect(save).toBeDisabled();
@@ -56,7 +57,9 @@ test("[02 5.3] discard and restore a candidate", async ({ page }) => {
   await card(page, 2).getByRole("button", { name: "Descartar" }).click();
   await expect(page.getByText("2 de 3 seleccionados")).toBeVisible();
   await expect(card(page, 2).getByLabel("Cantidad")).toHaveCount(0);
+  await expect(card(page, 2).getByRole("button", { name: "Restaurar" })).toBeFocused();
   await card(page, 2).getByRole("button", { name: "Restaurar" }).click();
+  await expect(card(page, 2).getByRole("button", { name: "Descartar" })).toBeFocused();
   await expect(card(page, 2).getByLabel("Cantidad")).toBeVisible();
   await expect(page.getByText("3 de 3 seleccionados")).toBeVisible();
 });
@@ -104,4 +107,17 @@ test("[02 6.2] after saving, the dashboard starts at the top without horizontal 
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("[02 5.3] deselecting and reselecting a card keeps its edits", async ({ page }) => {
+  await openRitual(page);
+  await summonCandidates(page);
+  await fill(page, 1, "24", "18.900");
+  const include = card(page, 1).getByRole("checkbox", { name: "Incluir al guardar" });
+  await include.click();
+  await expect(include).not.toBeChecked();
+  await expect(page.getByText("2 de 3 seleccionados")).toBeVisible();
+  await include.click();
+  await expect(card(page, 1).getByLabel("Cantidad")).toHaveValue("24");
+  await expect(card(page, 1).getByLabel("Precio unitario (COP)")).toHaveValue("18.900");
 });

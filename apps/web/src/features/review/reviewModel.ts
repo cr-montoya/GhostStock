@@ -45,9 +45,10 @@ export function draftFromCandidate(candidate: ProductCandidate): CandidateDraft 
 
 /** Digits with optional es-CO thousands dots or spaces ("18.900"); a decimal comma is rejected. */
 export function parseInteger(text: string): number | undefined {
-  const cleaned = text.trim().replace(/[.\s]/g, "");
-  if (!/^\d+$/.test(cleaned)) return undefined;
-  return Number(cleaned);
+  const trimmed = text.trim();
+  // Plain digits, or thousands groups of exactly three ("18.900", "1 250 000").
+  if (!/^\d+$/.test(trimmed) && !/^\d{1,3}(?:[.\s]\d{3})+$/.test(trimmed)) return undefined;
+  return Number(trimmed.replace(/[.\s]/g, ""));
 }
 
 const blankToUndefined = (value: string) => (value.trim() === "" ? undefined : value.trim());
@@ -79,7 +80,8 @@ export function toReviewedProduct(draft: CandidateDraft):
     else if (field === "sku") errors[field] = "skuFormat";
     else if (issue.code === "too_big" && (field === "quantity" || field === "unitPriceCop")) errors[field] = "range";
     else if (issue.code === "too_big") errors[field] = "tooLong";
-    else errors[field] = "invalid";
+    else if (field === "quantity" || field === "unitPriceCop") errors[field] = "invalid";
+    else errors[field] = "required";
   }
   return { ok: false, errors };
 }

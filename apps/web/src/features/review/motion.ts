@@ -12,19 +12,14 @@ export const riseItem: Variants = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    boxShadow: [
-      "0 0 0px 0px var(--ectoplasm-glow)",
-      "0 0 48px 2px var(--ectoplasm-glow)",
-      "0 0 0px 0px var(--ectoplasm-glow)",
-    ],
-    transition: {
-      type: "spring",
-      stiffness: 260,
-      damping: 24,
-      boxShadow: { duration: 0.6, ease: "easeOut" },
-      filter: { duration: 0.45 },
-    },
+    transition: { type: "spring", stiffness: 260, damping: 24, filter: { duration: 0.45 } },
   },
+};
+
+/** The ectoplasm glow: an overlay that pulses once as the card lands. */
+export const glowOnce: Variants = {
+  hidden: { opacity: 0 },
+  shown: { opacity: [0, 1, 0], transition: { duration: 0.6, delay: 0.15, ease: "easeOut" } },
 };
 
 /** Reduced motion: opacity only, at most 150 ms. */

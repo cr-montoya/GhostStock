@@ -1,4 +1,4 @@
-import type { Analysis } from "@ghoststock/contracts";
+import type { Analysis, ReviewedProduct } from "@ghoststock/contracts";
 import { motion, useReducedMotion } from "motion/react";
 import { ImagePlus, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -14,9 +14,9 @@ import {
   toReviewedProduct,
   type CandidateDraft,
 } from "./reviewModel";
-import type { ReviewedProduct } from "@ghoststock/contracts";
 
 interface ReviewStepProps {
+  headingRef?: (element: HTMLElement | null) => void;
   analysis: Analysis;
   photoUrl: string;
   saving: boolean;
@@ -25,7 +25,7 @@ interface ReviewStepProps {
   onRestart: () => void;
 }
 
-export function ReviewStep({ analysis, photoUrl, saving, saveError, onSave, onRestart }: ReviewStepProps) {
+export function ReviewStep({ headingRef, analysis, photoUrl, saving, saveError, onSave, onRestart }: ReviewStepProps) {
   const reduce = useReducedMotion();
   const [drafts, setDrafts] = useState<CandidateDraft[]>(() => analysis.candidates.map(draftFromCandidate));
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
@@ -60,7 +60,7 @@ export function ReviewStep({ analysis, photoUrl, saving, saveError, onSave, onRe
             <Sparkles className="size-3.5" aria-hidden="true" />
             {copy.review.eyebrow(analysis.candidates.length)}
           </p>
-          <h2 id="review-title" className="text-2xl font-medium md:text-3xl">
+          <h2 id="review-title" ref={headingRef} tabIndex={-1} className="text-2xl font-medium outline-none md:text-3xl">
             {copy.review.title}
           </h2>
           <p className="mt-3 max-w-xl text-muted-foreground">{copy.review.description}</p>
@@ -104,14 +104,15 @@ export function ReviewStep({ analysis, photoUrl, saving, saveError, onSave, onRe
               <p role="alert" className="text-blood">
                 {copy.review.saveFailed} {copy.errors[toClientError(saveError).code]}
               </p>
-            ) : pending > 0 ? (
+            ) : null}
+            {pending > 0 ? (
               <p className="text-ember">
                 {copy.review.pending(pending)}{" "}
                 <button type="button" className="min-h-6 underline underline-offset-4 hover:text-text" onClick={revealPending}>
                   {copy.review.showPending}
                 </button>
               </p>
-            ) : (
+            ) : saveError ? null : (
               <p className="text-muted-foreground">{selected.length > 0 ? copy.review.readyHint : copy.review.noneSelected}</p>
             )}
           </div>
