@@ -4,3 +4,5 @@ packages:
   - apps/*
   - infra
   - e2e
+allowBuilds:
+  esbuild: true
