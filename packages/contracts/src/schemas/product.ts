@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { Category, Confidence, ImageKeySchema, IsoDateTime, MediaKeySchema, Ulid } from "./common.js";
 
+// Bounds keep 1 000 products x quantity x price under Number.MAX_SAFE_INTEGER, so
+// inventory value stays exact in plain number math.
+export const MAX_QUANTITY = 100_000;
+export const MAX_UNIT_PRICE_COP = 50_000_000;
+
 // No defaults here: zod 4 applies .default() even inside .partial(), which would reset
 // description on every update. Defaults live only on the create path.
 const ProductFieldsBase = z.strictObject({
@@ -12,8 +17,8 @@ const ProductFieldsBase = z.strictObject({
     .string()
     .regex(/^[A-Za-z0-9._-]{1,64}$/)
     .optional(),
-  quantity: z.number().int().min(0).max(1_000_000),
-  unitPriceCop: z.number().int().min(0).max(1_000_000_000),
+  quantity: z.number().int().min(0).max(MAX_QUANTITY),
+  unitPriceCop: z.number().int().min(0).max(MAX_UNIT_PRICE_COP),
 });
 
 /** Fields the user owns. Quantity, unit price and SKU never come from the model. */
@@ -23,7 +28,7 @@ export const ProductFieldsSchema = ProductFieldsBase.extend({
 
 export const ReviewedProductSchema = ProductFieldsSchema.extend({
   aiConfidence: Confidence.optional(),
-  aiNotes: z.string().max(300).optional(),
+  aiNotes: z.string().trim().max(300).optional(),
 });
 
 export const ProductSchema = ReviewedProductSchema.extend({
