@@ -81,7 +81,8 @@ adds `requestId` (`event.requestContext.requestId`), and turns anything else int
 `inventory.ts` dispatches on `event.routeKey`:
 `GET /api/products`, `POST /api/products`, `GET /api/products/{id}`,
 `PUT /api/products/{id}`, `DELETE /api/products/{id}`, `GET /api/settings`,
-`PUT /api/settings`. Path `id` is validated with `Ulid`.
+`PUT /api/settings`, and `$default` (any unknown path) which returns
+`404 NOT_FOUND` in the standard envelope. Path `id` is validated with `Ulid`.
 
 ## Uploads
 

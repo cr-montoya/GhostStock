@@ -48,6 +48,7 @@ build, images served from the same domain.
 | GET, POST | `/api/products` | inventory |
 | GET, PUT, DELETE | `/api/products/{id}` | inventory |
 | GET, PUT | `/api/settings` | inventory |
+| any | `$default` (unknown path) | inventory, returns `404 NOT_FOUND` envelope |
 
 CSV export and dashboard stats are computed in the browser from the product list
 (no extra Lambda, ADR 0005).
