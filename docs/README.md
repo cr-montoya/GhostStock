@@ -8,9 +8,9 @@ doc lie is not done (`spec-sync` skill, PR template "Living docs" section).
 | [adr/](adr/README.md) | Why we chose each path | any | live |
 | [git-workflow.md](git-workflow.md) | Branches, commits, PRs, gates | harness | live |
 | [sdd-workflow.md](sdd-workflow.md) | Kiro spec to merged code | harness | live |
-| architecture.md | Components, data flow, AWS services, diagrams | infra | from spec 03 |
+| [architecture.md](architecture.md) | Components, data flow, AWS services, diagrams | infra | live |
 | [api.md](api.md) | Endpoints with example requests and responses (generated from fixtures) | contracts | live |
-| deployment.md | Bootstrap, CodeConnections, first deploy, pipeline | infra | from spec 03 |
+| [deployment.md](deployment.md) | Bootstrap, CodeConnections, first deploy, pipeline | infra | live |
 | kiro-usage.md | Which Kiro features we use, why, how to demo them | harness | from Kiro step 3 |
 | demo.md | The 3-minute demo script and checklist | web | before the demo |
 
