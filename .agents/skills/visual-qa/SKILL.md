@@ -11,10 +11,12 @@ description: >
 The UI is a judging criterion. "Works" is not enough: it must look premium.
 
 ## Steps
-1. Run the web app locally (`npm run dev -w apps/web`, MSW mocks on) and open it in a
-   browser you can screenshot.
-2. Capture each screen at 1440x900 and 390x844: Dashboard, Invocar, analysis in
-   progress, Revision, Inventario (table and grid), edit drawer, Ajustes.
+1. Capture with Playwright: `npx playwright test -c e2e --project=visual`
+   (starts Vite with MSW). Update baselines only on purpose with
+   `--update-snapshots` and review the diff images.
+2. Every screen at 1440x900 and Pixel 7: Almacén, Invocar (ritual, resurrection,
+   review), Inventario (table and cards), edit drawer, Ajustes, using the `?scenario=`
+   switch for each state. For live inspection, also open the dev server in a browser.
 3. Force every state: empty, loading/skeleton, zero detections, model error, network
    error, low stock, long names, 50+ products.
 4. Score against `ui-identity.md`:

@@ -29,7 +29,8 @@ an unticked box reads as "not done". No AI attribution lines anywhere.
 
 <!-- Real output, trimmed. Screenshots or a short clip for any UI change
      (desktop 1440 and phone 390). Never paste secrets or presigned URLs. -->
-- [ ] `npm test` green (affected workspaces)
+- [ ] `npm test` green (affected workspaces, Vitest units)
+- [ ] Playwright green: `npx playwright test -c e2e --project=<web-desktop|web-mobile|api|smoke>`
 - [ ] `npm run lint` and `npm run typecheck` clean
 - [ ] `npx cdk synth` OK (if `infra/**` changed) · `cdk diff` summary below
 - [ ] Manually verified:

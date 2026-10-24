@@ -31,7 +31,12 @@ apps/web/            React + Vite + Tailwind + shadcn/ui + Motion     (spec 02-w
 services/api/        Lambda handlers, Bedrock, DynamoDB, S3           (spec 01-api-bedrock)
 packages/contracts/  zod schemas + types + fixtures, shared by all    (spec 00-contracts)
 infra/               AWS CDK v2 + self-mutating CDK Pipeline         (spec 03-infra-pipeline)
+e2e/                 Playwright acceptance tests: web/ api/ smoke/ visual/ (ADR 0009)
 ```
+
+Tests: **Playwright** proves every acceptance criterion (UI flows on desktop and
+phone, deployed API, smoke, accessibility, visual); Vitest covers pure units. Rules in
+[.kiro/steering/testing.md](.kiro/steering/testing.md).
 
 ## How we work
 
@@ -66,10 +71,10 @@ decomposes, delegates and runs evaluators; it never builds and reviews the same 
 
 | Agent | Role | Owns |
 | --- | --- | --- |
-| `web-dev` | builder | `apps/web/**` |
-| `api-dev` | builder | `services/api/**` |
-| `infra-dev` | builder | `infra/**`, `docs/deployment.md` |
-| `qa-engineer` | evaluator (writes tests only) | AC -> evidence |
+| `web-dev` | builder | `apps/web/**`, `e2e/web/**`, `e2e/visual/**`, Playwright scaffold |
+| `api-dev` | builder | `services/api/**`, `e2e/api/**` |
+| `infra-dev` | builder | `infra/**`, `e2e/smoke/**`, `docs/deployment.md`, `docs/architecture.md` |
+| `qa-engineer` | evaluator (writes tests only) | AC -> Playwright evidence |
 | `code-reviewer` | evaluator, read-only | diff review |
 | `security-reviewer` | evaluator, read-only | Critical/High block merge |
 
