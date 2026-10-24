@@ -11,6 +11,7 @@ import type {
   ReviewedProduct,
   Settings,
   UpdateProductRequest,
+  UpdateSettingsRequest,
 } from "../types.js";
 import { ERROR_CODES, ERROR_RETRYABLE, type ErrorCode } from "../schemas/errors.js";
 
@@ -148,7 +149,15 @@ export const listProductsResponseFixture: ListProductsResponse = {
 
 export const updateProductRequestFixture: UpdateProductRequest = { quantity: 30, unitPriceCop: 19_500 };
 
+export const productResponseFixture: Product = {
+  ...(productsFixture[0] as Product),
+  ...updateProductRequestFixture,
+  updatedAt: at(30),
+};
+
 export const settingsFixture: Settings = { lowStockThreshold: 5 };
+
+export const updateSettingsRequestFixture: UpdateSettingsRequest = { lowStockThreshold: 8 };
 
 const ERROR_MESSAGES: Record<ErrorCode, string> = {
   VALIDATION_ERROR: "Request body failed validation",

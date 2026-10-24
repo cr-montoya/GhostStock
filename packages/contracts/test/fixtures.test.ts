@@ -27,7 +27,9 @@ describe("[00 9] fixtures", () => {
     ["createProductsResponseFixture", CreateProductsResponseSchema, contracts.createProductsResponseFixture],
     ["listProductsResponseFixture", ListProductsResponseSchema, contracts.listProductsResponseFixture],
     ["updateProductRequestFixture", UpdateProductRequestSchema, contracts.updateProductRequestFixture],
+    ["productResponseFixture", contracts.ProductResponseSchema, contracts.productResponseFixture],
     ["settingsFixture", SettingsSchema, contracts.settingsFixture],
+    ["updateSettingsRequestFixture", contracts.UpdateSettingsRequestSchema, contracts.updateSettingsRequestFixture],
   ] as const)("[00 9.2] %s parses", (_name, schema, fixture) => {
     const result = schema.safeParse(fixture);
     expect(result.success, JSON.stringify(result.error?.issues)).toBe(true);
