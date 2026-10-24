@@ -99,16 +99,25 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
 ## Analyses
 
 1. `HeadObject`: `NotFound` -> `IMAGE_NOT_FOUND`; `ContentLength > MAX_UPLOAD_BYTES`
-   -> `IMAGE_TOO_LARGE`; `ContentType` not allowed -> `UNSUPPORTED_MEDIA_TYPE`.
-2. `GetObject` -> `Body.transformToByteArray()`.
+   -> `IMAGE_TOO_LARGE`; `ContentType` not allowed -> `UNSUPPORTED_MEDIA_TYPE`. Any
+   other S3 failure -> `STORAGE_ERROR`.
+2. `GetObject` -> `Body.transformToByteArray()` (`NoSuchKey` -> `IMAGE_NOT_FOUND`); the
+   byte length is checked against `MAX_UPLOAD_BYTES` again before Bedrock.
 3. `converseWithTool` with `toolChoice: { tool: { name: "report_products" } }`,
    `temperature: 0`, `maxTokens: 2000`. The client is created with `maxAttempts: 1`;
-   one `AbortController` deadline of 25 s spans every attempt and backoff, so the
-   handler always answers with the envelope before the 28 s Lambda timeout.
-4. Retry policy and error mapping exactly as `ai-integration.md`.
-5. `ModelOutputSchema.safeParse(toolUse.input)`; map to `ProductCandidate` with
-   `candidateId: ulid()`.
-6. Emit metrics, log summary, return `Analysis`.
+   one `AbortController` deadline of 25 s spans every attempt and backoff (each call
+   and sleep races the deadline), so the handler always answers with the envelope
+   before the 28 s Lambda timeout. A retry happens only if the backoff fits in the
+   time left.
+4. Retry policy and error mapping exactly as `ai-integration.md`. A
+   `ValidationException` whose message does not mention the model, and any other
+   unlisted Bedrock exception, -> `INTERNAL_ERROR`.
+5. `stopReason` must be `tool_use`; the first `toolUse` block named `report_products`
+   is parsed with `ModelOutputSchema.safeParse`; map to `ProductCandidate` with
+   `candidateId: ulid()`. `latencyMs` spans the Converse call including retries.
+6. Emit `AnalysisLatencyMs` and `CandidateCount` on success, `AnalysisFailed` (single
+   metric, dimension `errorCode`) on failure; log the summary (`analysisId`,
+   `imageKey`, `modelId`, `latencyMs`, `candidateCount`, `attempts`); return `Analysis`.
 
 ## DynamoDB (ADR 0005)
 
