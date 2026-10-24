@@ -30,6 +30,11 @@ describe("[00 10] infra config", () => {
     expect(InfraConfigSchema.parse({ ...base, enableTests: "true" }).enableTests).toBe(true);
   });
 
+  it("[00 10.1] fails on blank numeric context instead of turning it into 0", () => {
+    expect(InfraConfigSchema.safeParse({ ...base, lowStockDefault: "" }).success).toBe(false);
+    expect(InfraConfigSchema.safeParse({ ...base, budgetUsd: "" }).success).toBe(false);
+  });
+
   it("[00 10.1] requires an inference profile id with the us. prefix", () => {
     expect(InfraConfigSchema.safeParse({ ...base, bedrockModelId: "anthropic.claude-sonnet-4-5-20250929-v1:0" }).success).toBe(false);
   });
