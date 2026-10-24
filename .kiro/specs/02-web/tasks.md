@@ -28,7 +28,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - Playwright: navigation on both viewports, Ctrl+K search.
   - _Requirements: 2.1, 2.2_
 
-- [ ] 4. API client and mocks
+- [x] 4. API client and mocks
   - `api/*`, query hooks, MSW handlers and scenarios from contract fixtures.
   - _Requirements: 11.1_
 
