@@ -55,13 +55,13 @@ Every UI slice ships with desktop and phone screenshots in its PR.
     scenario shows the ghost and CTA.
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 9. Inventory
+- [x] 9. Inventory
   - Table and cards, filters, drawer edit with optimistic update, delete dialog, CSV.
   - Playwright: search and chips, edit, delete, CSV download content checked with
     `productsToCsv`.
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 10. Settings
+- [x] 10. Settings
   - `ThresholdForm`; dashboard and inventory react to the saved threshold.
   - _Requirements: 9.1_
 
