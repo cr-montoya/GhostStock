@@ -1,17 +1,22 @@
 import { Command as CommandIcon } from "lucide-react";
-import { NavLink } from "react-router";
+import { Link, NavLink } from "react-router";
 import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy/es";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav";
 
+/** "⌘K" on Apple platforms, "Ctrl K" elsewhere. */
+function shortcutLabel() {
+  return /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
+}
+
 export function Sidebar({ onOpenCommand }: { onOpenCommand: () => void }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface/50 backdrop-blur-xl md:flex">
       <div className="flex h-20 items-center px-6">
-        <NavLink to="/" aria-label={copy.brand.name} className="rounded-md">
+        <Link to="/" aria-label={copy.brand.name} className="rounded-md">
           <Logo />
-        </NavLink>
+        </Link>
       </div>
 
       <div className="px-4">
@@ -21,9 +26,9 @@ export function Sidebar({ onOpenCommand }: { onOpenCommand: () => void }) {
           className="group flex h-11 w-full items-center gap-3 rounded-md border border-border bg-bg/50 px-3 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-text"
         >
           <CommandIcon className="size-4 text-violet-soft" aria-hidden="true" />
-          <span className="flex-1 text-left">{copy.nav.commandHint}</span>
+          <span className="flex-1 truncate text-left">{copy.nav.commandHint}</span>
           <kbd className="rounded border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-            Ctrl K
+            {shortcutLabel()}
           </kbd>
           <span className="sr-only">{copy.command.open}</span>
         </button>
