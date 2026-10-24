@@ -21,3 +21,25 @@ test("[02 11.1] ?scenario=empty is selected and survives navigation", async ({ p
   await expect(page.getByRole("heading", { level: 1, name: "GhostStock" })).toBeVisible();
   expect(await page.evaluate(getJson("/api/products"))).toEqual({ status: 200, body: { products: [], count: 0 } });
 });
+
+const postJson = (path: string, body: unknown) =>
+  `fetch(${JSON.stringify(path)}, { method: "POST", headers: { "content-type": "application/json" }, body: ${JSON.stringify(
+    JSON.stringify(body),
+  )} }).then(async (r) => ({ status: r.status, body: await r.json() }))`;
+
+const analysisCases = [
+  ["happy", 200, (body: { candidates?: unknown[] }) => expect(body.candidates).toHaveLength(3)],
+  ["zero-candidates", 200, (body: { candidates?: unknown[] }) => expect(body.candidates).toEqual([])],
+  ["model-error", 502, (body: { error?: { code: string } }) => expect(body.error?.code).toBe("MODEL_INVALID_OUTPUT")],
+  ["throttled", 429, (body: { error?: unknown }) => expect(body.error).toBeUndefined()],
+] as const;
+
+for (const [scenario, status, check] of analysisCases) {
+  test(`[02 11.1] scenario ${scenario} drives POST /api/analyses`, async ({ page }) => {
+    await page.goto(`/?scenario=${scenario}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    const result: { status: number; body: unknown } = await page.evaluate(postJson("/api/analyses", { imageKey: "tmp/01JB5X7Q8M0000000000000900.jpg" }));
+    expect(result.status).toBe(status);
+    check(result.body as never);
+  });
+}
