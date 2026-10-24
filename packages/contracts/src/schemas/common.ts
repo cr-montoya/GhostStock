@@ -16,8 +16,9 @@ export const CATEGORIES = [
 ] as const;
 
 export const Category = z.enum(CATEGORIES);
+export type Category = z.infer<typeof Category>;
 
-export const CATEGORY_LABELS: Record<z.infer<typeof Category>, string> = {
+export const CATEGORY_LABELS: Record<Category, string> = {
   alimentos: "Alimentos",
   bebidas: "Bebidas",
   aseo: "Aseo",
@@ -39,15 +40,17 @@ export const IsoDateTime = z.iso.datetime();
 
 export const IMAGE_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const ImageContentType = z.enum(IMAGE_CONTENT_TYPES);
+export type ImageContentType = z.infer<typeof ImageContentType>;
 
 /** File extension used in S3 keys for each allowed content type. */
-export const IMAGE_EXTENSIONS: Record<z.infer<typeof ImageContentType>, "jpg" | "png" | "webp"> = {
+export const IMAGE_EXTENSIONS: Record<ImageContentType, "jpg" | "png" | "webp"> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
 };
 
 export const Confidence = z.enum(["high", "medium", "low"]);
+export type Confidence = z.infer<typeof Confidence>;
 
 /** Raw upload key, written by the presigned POST and deleted by lifecycle after 1 day. */
 export const ImageKeySchema = z.string().regex(new RegExp(`^tmp/${ULID_PATTERN}\\.(jpg|png|webp)$`));
