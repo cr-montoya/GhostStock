@@ -1,5 +1,6 @@
 // Renders the synthetic fixture photos in images/ (no people, no third-party licenses).
 // Run from e2e/ (Node 22.18+ strips types): PW_CHANNEL=chrome node fixtures/render-images.ts
+import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
 const shelf = (items: string) => `
@@ -52,6 +53,6 @@ const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: proces
 const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
 for (const [file, html] of Object.entries(scenes)) {
   await page.setContent(`<!doctype html><html>${html}</html>`);
-  await page.screenshot({ path: new URL(`images/${file}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"), type: "jpeg", quality: 82 });
+  await page.screenshot({ path: fileURLToPath(new URL(`images/${file}`, import.meta.url)), type: "jpeg", quality: 82 });
 }
 await browser.close();

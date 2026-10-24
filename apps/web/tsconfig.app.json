@@ -17,7 +17,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@ghoststock/contracts": ["../../packages/contracts/src/index.ts"]
     }
   },
   "include": ["src"]
