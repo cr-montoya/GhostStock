@@ -71,14 +71,15 @@ decomposes, delegates and runs evaluators; it never builds and reviews the same 
 
 | Agent | Role | Owns |
 | --- | --- | --- |
-| `web-dev` | builder | `apps/web/**`, `e2e/web/**`, `e2e/visual/**`, Playwright scaffold |
+| `web-dev` | builder | `apps/web/**`, `e2e/web/**`, `e2e/visual/**`, `e2e/fixtures/**`, Playwright scaffold, `docs/demo.md` |
 | `api-dev` | builder | `services/api/**`, `e2e/api/**` |
 | `infra-dev` | builder | `infra/**`, `e2e/smoke/**`, `docs/deployment.md`, `docs/architecture.md` |
 | `qa-engineer` | evaluator (writes tests only) | AC -> Playwright evidence |
 | `code-reviewer` | evaluator, read-only | diff review |
 | `security-reviewer` | evaluator, read-only | Critical/High block merge |
 
-`packages/contracts/**` is owned by spec `00-contracts` and changes only there.
+`packages/contracts/**` and `docs/api.md` are owned by spec `00-contracts` and change
+only there.
 
 ## Skills
 
