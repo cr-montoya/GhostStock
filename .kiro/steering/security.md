@@ -55,7 +55,8 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
   rejected (images never travel through the API).
 - Runtime `nodejs22.x`, arm64. Timeouts: analyses 28 s (under the 30 s HTTP API
   limit), others 10 s. Memory: analyses 1024 MB, others 256 MB.
-- Reserved concurrency 5 on analyses (caps Bedrock spend).
+- No reserved concurrency on analyses while the account quota is 10 (Lambda keeps 10
+  unreserved, so a reservation fails the deploy). Reserve 5 once the quota is raised.
 - Structured JSON logs (Powertools Logger). Never log image bytes, base64, presigned
   URLs or POST fields. Log `requestId`, `imageKey`, `modelId`, latency, error code.
 - Log retention 14 days.
@@ -96,7 +97,7 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
 ## Cost guardrails
 
 - AWS Budgets monthly cost budget of 20 USD with email alerts at 80% and 100%.
-- Throttling + reserved concurrency + 3.75 MB upload cap (the Bedrock Converse per-image limit) bound Bedrock spend.
+- Throttling + 3.75 MB upload cap (the Bedrock Converse per-image limit) bound Bedrock spend.
 
 ## Supply chain
 

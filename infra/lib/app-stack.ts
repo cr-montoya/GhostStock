@@ -60,8 +60,9 @@ export class GhostStockAppStack extends Stack {
       memorySize: 1024,
       // Under the 30 s HTTP API integration limit.
       timeout: Duration.seconds(28),
-      // Caps concurrent Bedrock calls, and so Bedrock spend.
-      reservedConcurrentExecutions: 5,
+      // No reserved concurrency: new accounts have a 10 execution quota and Lambda must
+      // keep 10 unreserved, so any reservation fails the deploy. Stage throttling and the
+      // budget bound Bedrock spend; reserve 5 again once the quota is raised.
       environment: { MEDIA_BUCKET: media.bucketName, BEDROCK_MODEL_ID: config.bedrockModelId },
     }).fn;
 

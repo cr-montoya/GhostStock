@@ -122,7 +122,7 @@ before tests because contracts export `dist/` and `BucketDeployment` needs
 | Web bucket | same hardening, no CORS, no lifecycle, DESTROY + autoDelete |
 | Table | `TableV2`, `PK` / `SK` strings, on demand, `TableEncryptionV2.awsManagedKey()` (KMS `aws/dynamodb`), PITR on, DESTROY (demo) |
 | uploads fn | 256 MB, 10 s, env `MEDIA_BUCKET` |
-| analyses fn | 1024 MB, 28 s, reserved concurrency 5, env `MEDIA_BUCKET`, `BEDROCK_MODEL_ID` |
+| analyses fn | 1024 MB, 28 s, no reserved concurrency (account quota 10), env `MEDIA_BUCKET`, `BEDROCK_MODEL_ID` |
 | inventory fn | 256 MB, 10 s, env `MEDIA_BUCKET`, `TABLE_NAME`, `LOW_STOCK_DEFAULT` |
 | HTTP API | routes per `architecture.md` plus `$default` to inventory, `HttpLambdaIntegration`, default stage throttle 10/5, access log group JSON 14 days |
 | Distribution | see below |
