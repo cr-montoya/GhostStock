@@ -12,10 +12,10 @@ contracts test suite. Owner: spec `00-contracts` (changes go through a contracts
 | Method | Path | Request | Success | Errors |
 | --- | --- | --- | --- | --- |
 | POST | `/api/uploads` | `CreateUploadRequest` | 201 `CreateUploadResponse` | 400, 413, 415 |
-| POST | `/api/analyses` | `CreateAnalysisRequest` | 200 `Analysis` | 400, 404 `IMAGE_NOT_FOUND`, 413, 415, 502, 503 |
+| POST | `/api/analyses` | `CreateAnalysisRequest` | 200 `Analysis` | 400, 404 `IMAGE_NOT_FOUND`, 413, 415, 500, 502, 503 |
 | GET | `/api/products` |  | 200 `ListProductsResponse` | 500 |
 | POST | `/api/products` | `CreateProductsRequest` | 201 `CreateProductsResponse` | 400, 404 `IMAGE_NOT_FOUND`, 500 |
-| GET | `/api/products/{id}` |  | 200 `Product` | 400, 404 `NOT_FOUND` |
+| GET | `/api/products/{id}` |  | 200 `Product` | 400, 404 `NOT_FOUND`, 500 `STORAGE_ERROR` |
 | PUT | `/api/products/{id}` | `UpdateProductRequest` | 200 `Product` | 400, 404 `NOT_FOUND`, 500 |
 | DELETE | `/api/products/{id}` |  | 204 | 400, 404 `NOT_FOUND`, 500 |
 | GET | `/api/settings` |  | 200 `Settings` | 500 |
@@ -177,6 +177,11 @@ Candidates never contain price, quantity, SKU or barcode (ADR 0007). Errors:
   }
 }
 ```
+
+Bedrock `ValidationException` mapping: about the model or access gives `503 MODEL_UNAVAILABLE`;
+about the image (format, dimensions, decode) gives `415 UNSUPPORTED_MEDIA_TYPE` with message
+`Image could not be processed`; anything else gives `500 INTERNAL_ERROR`. An S3 failure other
+than a missing key gives `500 STORAGE_ERROR`.
 
 ## Products
 
