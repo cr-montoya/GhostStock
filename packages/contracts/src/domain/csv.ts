@@ -19,7 +19,7 @@ const EOL = "\r\n";
 /** Quotes a text cell (RFC 4180) and neutralizes spreadsheet formula injection. */
 function textCell(value: string | undefined): string {
   let text = value ?? "";
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (/^[=+\-@\t\r]/.test(text.trimStart())) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 

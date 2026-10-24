@@ -73,7 +73,7 @@ describe("[00 8.2] csv export", () => {
 });
 
 describe("[00 8.3] csv formula injection", () => {
-  it.each(["=SUM(A1)", "+57300", "-1", "@cmd"])("neutralizes %s", (name) => {
+  it.each(["=SUM(A1)", "+57300", "-1", "@cmd", "  =1+1"])("neutralizes %s", (name) => {
     const row = productsToCsv([{ ...productsFixture[0], name } as Product]).split("\r\n")[1];
     expect(row?.startsWith(`"'${name}"`)).toBe(true);
   });
