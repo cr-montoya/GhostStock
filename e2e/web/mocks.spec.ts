@@ -6,7 +6,7 @@ const getJson = (path: string) =>
 
 test("[02 11.1] dev serves /api through MSW from contract fixtures", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "GhostStock" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeVisible();
   const products = await page.evaluate(getJson("/api/products"));
   expect(products).toEqual({ status: 200, body: JSON.parse(JSON.stringify(listProductsResponseFixture)) });
   const settings = await page.evaluate(getJson("/api/settings"));
@@ -15,10 +15,10 @@ test("[02 11.1] dev serves /api through MSW from contract fixtures", async ({ pa
 
 test("[02 11.1] ?scenario=empty is selected and survives navigation", async ({ page }) => {
   await page.goto("/?scenario=empty");
-  await expect(page.getByRole("heading", { level: 1, name: "GhostStock" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeVisible();
   expect(await page.evaluate(getJson("/api/products"))).toEqual({ status: 200, body: { products: [], count: 0 } });
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "GhostStock" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeVisible();
   expect(await page.evaluate(getJson("/api/products"))).toEqual({ status: 200, body: { products: [], count: 0 } });
 });
 
