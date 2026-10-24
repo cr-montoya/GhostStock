@@ -27,6 +27,24 @@ flowchart LR
 After `00-contracts` merges, 01, 02 and 03 run in parallel worktrees. No two specs own
 the same paths; contract changes go only through `00-contracts`.
 
+## Critical path to the first deploy
+
+```mermaid
+flowchart LR
+  C[00 contracts] --> A1[01 task 1: handler stubs]
+  C --> W1[02 task 1: web + e2e scaffold]
+  C --> I1[03 tasks 1-6: infra]
+  A1 --> D[03 task 8: first pipeline deploy]
+  W1 --> D
+  I1 --> D
+  D --> R[01 and 02 features land, each merge deploys]
+  R --> S[03 task 9: smoke + enableTests]
+```
+
+The first deploy has slow manual steps (Bedrock model access, CodeConnections
+authorization, bootstrap), so it starts as soon as the stubs and the web scaffold
+exist, while the features are still being built.
+
 ## Loop rules
 
 - The builder never certifies its own work.
