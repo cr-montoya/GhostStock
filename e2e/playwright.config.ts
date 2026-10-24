@@ -3,7 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 // Projects for every lane (ADR 0009). `api` and `smoke` target a deployed stack through
 // BASE_URL; web and visual run against the Vite dev server with MSW.
 const baseUrl = process.env.BASE_URL;
-const localUrl = "http://localhost:5173";
+// Each worktree uses its own WEB_PORT so a reused dev server is always this checkout's.
+const port = process.env.WEB_PORT ?? "5173";
+const localUrl = `http://localhost:${port}`;
 // Optional installed browser (e.g. PW_CHANNEL=chrome) instead of the downloaded Chromium.
 const channel = process.env.PW_CHANNEL;
 
@@ -21,13 +23,15 @@ export default defineConfig({
     { name: "web-mobile", testDir: "web", use: { ...devices["Pixel 7"], baseURL: localUrl } },
     // Visual specs switch between 1440x900 and Pixel 7 per describe block (see visual/viewports.ts).
     { name: "visual", testDir: "visual", use: { baseURL: localUrl, viewport: { width: 1440, height: 900 } } },
-    { name: "api", testDir: "api", use: { baseURL: baseUrl } },
-    { name: "smoke", testDir: "smoke", use: { baseURL: baseUrl } },
+    // Deployed targets: stage throttling (burst 10, rate 5) needs one request stream.
+    { name: "api", testDir: "api", fullyParallel: false, workers: 1, use: { baseURL: baseUrl } },
+    { name: "smoke", testDir: "smoke", fullyParallel: false, workers: 1, use: { baseURL: baseUrl } },
   ],
   webServer: baseUrl
     ? undefined
     : {
         command: "pnpm --filter @ghoststock/web dev",
+        env: { WEB_PORT: port },
         url: localUrl,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

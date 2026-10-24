@@ -37,6 +37,9 @@ function devMedia(): Plugin {
   };
 }
 
+// Each worktree runs its own dev server: WEB_PORT picks the port (default 5173).
+const port = Number(process.env.WEB_PORT ?? 5173);
+
 const src = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
@@ -48,8 +51,8 @@ export default defineConfig({
       "@ghoststock/contracts": src("../../packages/contracts/src/index.ts"),
     },
   },
-  server: { port: 5173, strictPort: true },
-  preview: { port: 5173, strictPort: true },
+  server: { port, strictPort: true },
+  preview: { port, strictPort: true },
   build: { sourcemap: false },
   test: {
     environment: "jsdom",

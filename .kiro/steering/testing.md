@@ -26,6 +26,12 @@ referenced in the test title: `test("[02-web 3.2] shows zero detections state", 
 | `smoke` | `BASE_URL` | 03 | pipeline post step |
 | `visual` | Vite + MSW, `toHaveScreenshot` | 02 | local only (OS dependent baselines) |
 
+- One dev server per worktree: set `WEB_PORT` (default 5173) to a port no other
+  checkout uses, e.g. `WEB_PORT=5174 pnpm --filter @ghoststock/e2e test:web`. Vite and
+  the Playwright `webServer` both read it (`strictPort`), so `reuseExistingServer` never
+  picks up another worktree's half-edited code.
+- `api` and `smoke` run with one worker and no parallelism: the deployed stage
+  throttles at burst 10, rate 5.
 - MSW scenarios selected with the `?scenario=` query param (`happy`, `empty`,
   `zero-candidates`, `model-error`, `throttled`, `network-error`) so web tests are
   deterministic.
