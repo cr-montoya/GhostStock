@@ -74,7 +74,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               >
                 <ProductPhoto src={product.mediaKey} alt="" className="size-8 shrink-0 rounded-sm" />
                 <span className="min-w-0 flex-1 truncate">{product.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="hidden shrink-0 text-xs text-text/70 sm:inline">
                   {CATEGORY_LABELS[product.category]}
                   {product.sku && <span className="ml-2 font-mono">{product.sku}</span>}
                 </span>
