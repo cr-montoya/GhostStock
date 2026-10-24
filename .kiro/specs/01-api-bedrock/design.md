@@ -112,9 +112,12 @@ Request validation mapping (the only place zod issues are not all `400`): an iss
    2 attempts, 1 s connect and 5 s request timeouts) is subtracted before Converse;
    no time left -> `MODEL_THROTTLED` without calling Bedrock. A retry happens only if
    the backoff fits in the time left. The Bedrock client uses region `us-east-1`.
-4. Retry policy and error mapping exactly as `ai-integration.md`. A
-   `ValidationException` whose message does not mention the model, and any other
-   unlisted Bedrock exception, -> `INTERNAL_ERROR`.
+4. Retry policy and error mapping exactly as `ai-integration.md`. `ValidationException`
+   by message, checked in this order: `/model|access/i` -> `MODEL_UNAVAILABLE`;
+   `/image|format|dimension|decode|could not process/i` -> `UNSUPPORTED_MEDIA_TYPE`
+   (the photo is the problem, the UI asks for another); otherwise `INTERNAL_ERROR`.
+   Any other unlisted Bedrock exception -> `INTERNAL_ERROR`. The Bedrock message is
+   logged (capped, `describeCause`), never image bytes.
 5. `stopReason` must be `tool_use`; the first `toolUse` block named `report_products`
    is parsed with `ModelOutputSchema.safeParse`; map to `ProductCandidate` with
    `candidateId: ulid()`. `latencyMs` spans the Converse call including retries.

@@ -60,8 +60,11 @@ so that the app never shows invented products.
    `ModelTimeoutException` or the deadline itself SHALL return `503 MODEL_THROTTLED`
    without further retries.
 4. IF Bedrock throws `AccessDeniedException`, `ResourceNotFoundException` or a
-   `ValidationException` about the model, THEN THE API SHALL return
-   `503 MODEL_UNAVAILABLE`.
+   `ValidationException` about the model or access, THEN THE API SHALL return
+   `503 MODEL_UNAVAILABLE`; IF it throws a `ValidationException` about the image
+   (cannot process, format, dimensions, decode), THEN THE API SHALL return
+   `415 UNSUPPORTED_MEDIA_TYPE`; any other `ValidationException` SHALL return
+   `500 INTERNAL_ERROR`, logging the Bedrock message and never image bytes.
 5. THE analyses function SHALL issue at most one successful Converse call per request,
    configure the Bedrock client with `maxAttempts: 1` (retries are ours only), and
    enforce one overall 25 s deadline across all attempts, so the response is always the
