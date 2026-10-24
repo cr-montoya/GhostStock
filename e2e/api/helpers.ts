@@ -50,7 +50,8 @@ export const test = base.extend<{ api: Api }>({
 
 /**
  * The api project targets a deployed stack; without BASE_URL there is nothing to test.
- * Tests in a file run in order on one worker to stay under the stage throttling.
+ * Tests in a file run in order; run the project with --workers=1 so the whole suite is
+ * serial and stays under the stage throttling, which is never relaxed for tests.
  */
 export function setupApiSpec() {
   test.skip(!process.env.BASE_URL, "BASE_URL of a deployed stack is required (project api)");
