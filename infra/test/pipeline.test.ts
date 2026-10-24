@@ -176,4 +176,19 @@ describe("pipeline", () => {
     );
     for (const command of npmGlobal) expect(command).not.toMatch(/@(latest|2)$/);
   });
+
+  it("[ADR 0013] manual teardown project deletes only the app stack and is not a pipeline step", () => {
+    const { pipeline } = synth({ connectionArn: TEST_CONNECTION_ARN });
+    const teardown = Object.values(
+      pipeline.findResources("AWS::CodeBuild::Project", { Properties: { Name: "GhostStock-Teardown" } }),
+    ) as Project[];
+    expect(teardown).toHaveLength(1);
+    const commands = commandsOf(JSON.parse(teardown[0]!.Properties.Source.BuildSpec));
+    expect(commands).toEqual([
+      "aws cloudformation delete-stack --stack-name Prod-GhostStockAppStack",
+      "aws cloudformation wait stack-delete-complete --stack-name Prod-GhostStockAppStack",
+    ]);
+    const stages = JSON.stringify(pipeline.findResources("AWS::CodePipeline::Pipeline"));
+    expect(stages).not.toContain("Teardown");
+  });
 });
