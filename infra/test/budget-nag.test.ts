@@ -10,8 +10,13 @@ const nagErrors = (stack: Stack) =>
   Annotations.fromStack(stack).findError("*", Match.stringLikeRegexp("AwsSolutions-.*"));
 
 describe("budget", () => {
-  it("[03-infra-pipeline 8.1] creates no budget without budgetEmail", () => {
-    synth().appTemplate.resourceCountIs("AWS::Budgets::Budget", 0);
+  it("[03-infra-pipeline 8.1] creates no budget without budgetEmail, and warns", () => {
+    const { appTemplate, pipelineStack } = synth();
+    appTemplate.resourceCountIs("AWS::Budgets::Budget", 0);
+    Annotations.fromStack(pipelineStack).hasWarning(
+      "/GhostStockPipeline",
+      Match.stringLikeRegexp("budgetEmail not set"),
+    );
   });
 
   it("[03-infra-pipeline 8.1] monthly cost budget with 80% and 100% actual alerts", () => {
@@ -54,10 +59,11 @@ describe("cdk-nag", () => {
       config: readConfig(app.node),
       assets: FIXTURE_ASSETS,
     });
-    const { appStack } = stage;
-    new s3.Bucket(appStack, "Unhardened");
-    const ids = nagErrors(appStack).map((m) => m.id);
-    expect(ids).toEqual(expect.arrayContaining([expect.stringContaining("/Unhardened/Resource")]));
+    new s3.Bucket(stage.appStack, "Unhardened");
+    // With the recommended feature flags, error annotations fail synth outright.
+    expect(() => Annotations.fromStack(stage.appStack)).toThrow(
+      /AwsSolutions-S\d+[\s\S]*\/Unhardened\/Resource/,
+    );
   });
 
   it("[03-infra-pipeline 9.2] every suppression carries a written reason", () => {

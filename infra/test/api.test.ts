@@ -73,16 +73,23 @@ describe("functions", () => {
     });
   });
 
-  it("[03-infra-pipeline 5.1] explicit log groups keep 14 days", () => {
-    appTemplate.resourcePropertiesCountIs("AWS::Logs::LogGroup", { RetentionInDays: 14 }, 4);
-  });
+  it.each(["uploads", "analyses", "inventory"])(
+    "[03-infra-pipeline 5.1] %s logs to its own log group with 14 day retention",
+    (name) => {
+      const groupId = fn(name).LoggingConfig!.LogGroup.Ref;
+      const group = appTemplate.toJSON().Resources[groupId];
+      expect(group.Type).toBe("AWS::Logs::LogGroup");
+      expect(group.Properties.RetentionInDays).toBe(14);
+    },
+  );
 
-  it("[03-infra-pipeline 5.1] bundling is ESM, bundles every module and adds the require banner", () => {
+  it("[03-infra-pipeline 5.1] ApiFunction source declares ESM, no externals and the require banner", () => {
     const fns = appStack.node
       .findAll()
       .filter((c) => c.node.id === "Function" && c.node.scope?.node.id.match(/Uploads|Analyses|Inventory/));
     expect(fns).toHaveLength(3);
-    // Bundling options are not in the template; read them from the source of truth.
+    // Bundling options never reach the template; this checks the construct source, and
+    // the real bundle is exercised by `cdk synth` (see docs/deployment.md).
     const source = readFileSync(new URL("../lib/constructs/api-function.ts", import.meta.url), "utf8");
     expect(source).toContain("externalModules: []");
     expect(source).toContain("format: OutputFormat.ESM");
@@ -97,16 +104,26 @@ describe("functions", () => {
 
   it("[03-infra-pipeline 5.2] analyses reads tmp/, lists with tmp/* prefix and invokes the model", () => {
     const s = statements("analyses");
-    expect(actions(s)).toEqual(["bedrock:InvokeModel", "s3:GetObject", "s3:ListBucket"]);
+    expect(actions(s)).toEqual([
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModel",
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]);
     const get = s.find((x) => x.Action === "s3:GetObject")!;
     expect(resolve(get.Resource)).toMatch(/\/tmp\/\*/);
     const list = s.find((x) => x.Action === "s3:ListBucket")!;
     expect(list.Condition).toEqual({ StringLike: { "s3:prefix": "tmp/*" } });
-    const bedrock = s.find((x) => x.Action === "bedrock:InvokeModel")!;
-    expect(resolve(bedrock.Resource)).toBe(
-      JSON.stringify([
-        `arn:aws:bedrock:us-east-1:${TEST_ACCOUNT}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0`,
-        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+    const profileArn = `arn:aws:bedrock:us-east-1:${TEST_ACCOUNT}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0`;
+    const bedrock = s.filter((x) => x.Action === "bedrock:InvokeModel");
+    expect(bedrock.map((x) => ({ resource: resolve(x.Resource), condition: x.Condition }))).toEqual(
+      expect.arrayContaining([
+        { resource: JSON.stringify(profileArn), condition: undefined },
+        {
+          resource: JSON.stringify("arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"),
+          // Only through the inference profile, never as a direct model call.
+          condition: { StringEquals: { "bedrock:InferenceProfileArn": profileArn } },
+        },
       ]),
     );
   });
@@ -154,6 +171,40 @@ describe("http api", () => {
         "PUT /api/settings",
       ].sort(),
     );
+  });
+
+  it("[03-infra-pipeline 5.3] $default and every inventory route reach the inventory function", () => {
+    const resources = appTemplate.toJSON().Resources as Record<string, { Type: string; Properties: Record<string, unknown> }>;
+    const functionIdOf = (service: string) =>
+      Object.entries(resources).find(
+        ([, r]) =>
+          r.Type === "AWS::Lambda::Function" &&
+          (r.Properties.Environment as Fn["Properties"]["Environment"] | undefined)?.Variables
+            ?.POWERTOOLS_SERVICE_NAME === service,
+      )![0];
+    const functionBehind = (routeKey: string) => {
+      const route = Object.values(resources).find(
+        (r) => r.Type === "AWS::ApiGatewayV2::Route" && r.Properties.RouteKey === routeKey,
+      )!;
+      const integrationId = JSON.stringify(route.Properties.Target).match(/"Ref":"([^"]+)"/)![1]!;
+      const uri = JSON.stringify(resources[integrationId]!.Properties.IntegrationUri);
+      return uri.match(/"Fn::GetAtt":\["([^"]+)","Arn"\]/)![1];
+    };
+    const inventory = functionIdOf("inventory");
+    for (const key of [
+      "$default",
+      "GET /api/products",
+      "POST /api/products",
+      "GET /api/products/{id}",
+      "PUT /api/products/{id}",
+      "DELETE /api/products/{id}",
+      "GET /api/settings",
+      "PUT /api/settings",
+    ]) {
+      expect(functionBehind(key), key).toBe(inventory);
+    }
+    expect(functionBehind("POST /api/uploads")).toBe(functionIdOf("uploads"));
+    expect(functionBehind("POST /api/analyses")).toBe(functionIdOf("analyses"));
   });
 
   it("[03-infra-pipeline 5.3] throttles the default stage and writes JSON access logs", () => {

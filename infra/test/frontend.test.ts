@@ -62,7 +62,26 @@ describe("distribution", () => {
     expect(resolved(origin.DomainName)).toContain("MediaBucket");
   });
 
-  it("[03-infra-pipeline 6.2] HTTPS only, HTTP/2 and 3, security headers with the media host in CSP", () => {
+  it("[03-infra-pipeline 6.1] CloudFront may read only saved photos, never tmp/ uploads", () => {
+    const policies = Object.values(
+      appTemplate.findResources("AWS::S3::BucketPolicy") as Record<
+        string,
+        { Properties: { Bucket: unknown; PolicyDocument: { Statement: { Principal?: { Service?: string }; Resource: unknown; Action: unknown }[] } } }
+      >,
+    ).filter((p) => resolved(p.Properties.Bucket).includes("MediaBucket"));
+    const cloudfrontReads = policies
+      .flatMap((p) => p.Properties.PolicyDocument.Statement)
+      .filter((s) => s.Principal?.Service === "cloudfront.amazonaws.com");
+    expect(cloudfrontReads).toHaveLength(1);
+    expect(cloudfrontReads[0]!.Action).toBe("s3:GetObject");
+    expect(resolved(cloudfrontReads[0]!.Resource)).toMatch(/"\/media\/products\/\*"\]\]\}$/);
+  });
+
+  it("[03-infra-pipeline 6.2] HTTPS (redirect for SPA and media, reject on /api/*), HTTP/2 and 3, headers", () => {
+    expect(distribution().DefaultCacheBehavior.ViewerProtocolPolicy).toBe("redirect-to-https");
+    expect(behavior("/media/*").ViewerProtocolPolicy).toBe("redirect-to-https");
+    // Redirecting a POST would drop its body, so plain HTTP on the API is rejected.
+    expect(behavior("/api/*").ViewerProtocolPolicy).toBe("https-only");
     expect(distribution().HttpVersion).toBe("http2and3");
     const policies = appTemplate.findResources("AWS::CloudFront::ResponseHeadersPolicy");
     const config = (Object.values(policies)[0] as {

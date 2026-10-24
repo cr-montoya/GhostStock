@@ -1,7 +1,9 @@
-import { Duration, Fn, Stack } from "aws-cdk-lib";
+import { Annotations, Duration, Fn, RemovalPolicy, Stack } from "aws-cdk-lib";
 import type * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import { HttpOrigin, S3BucketOrigin } from "aws-cdk-lib/aws-cloudfront-origins";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import { Construct } from "constructs";
@@ -65,6 +67,15 @@ export class Frontend extends Construct {
       },
     });
 
+    // CDK would grant the OAC read on the whole media bucket. Through a reference it
+    // cannot edit the policy, so the grant below covers saved photos only and raw
+    // uploads in tmp/ stay unreadable even if routing changes.
+    const mediaRef = s3.Bucket.fromBucketAttributes(this, "MediaRef", {
+      bucketArn: media.bucketArn,
+      bucketName: media.bucketName,
+      bucketRegionalDomainName: media.bucketRegionalDomainName,
+    });
+
     // apiEndpoint is https://<id>.execute-api.<region>.amazonaws.com; keep the host.
     const apiDomain = Fn.select(2, Fn.split("/", props.httpApi.apiEndpoint));
 
@@ -90,7 +101,7 @@ export class Frontend extends Construct {
           responseHeadersPolicy: headers,
         },
         "/media/*": {
-          origin: S3BucketOrigin.withOriginAccessControl(media),
+          origin: S3BucketOrigin.withOriginAccessControl(mediaRef),
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           responseHeadersPolicy: headers,
@@ -98,7 +109,31 @@ export class Frontend extends Construct {
       },
     });
 
+    // The policy CDK says it cannot write is the narrower one written here.
+    Annotations.of(this).acknowledgeWarning(
+      "@aws-cdk/aws-cloudfront-origins:updateImportedBucketPolicyOac",
+      "Media bucket policy is added explicitly for media/products/* only.",
+    );
+    media.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: "AllowCloudFrontReadSavedPhotos",
+        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
+        actions: ["s3:GetObject"],
+        resources: [media.arnForObjects("media/products/*")],
+        conditions: {
+          StringEquals: {
+            "AWS:SourceArn": `arn:aws:cloudfront::${Stack.of(this).account}:distribution/${this.distribution.distributionId}`,
+          },
+        },
+      }),
+    );
+
     new s3deploy.BucketDeployment(this, "DeployWeb", {
+      // Explicit group so the helper's logs expire and leave with the stack.
+      logGroup: new logs.LogGroup(this, "DeployWebLogs", {
+        retention: logs.RetentionDays.TWO_WEEKS,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
       sources: [s3deploy.Source.asset(props.webDistDir)],
       destinationBucket: this.webBucket,
       distribution: this.distribution,
