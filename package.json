@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "build": "pnpm -r --if-present build",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm --filter @ghoststock/contracts build && pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "preinstall": "node -e \"if(!/^pnpm\\//.test(process.env.npm_config_user_agent||'')){console.error('Use pnpm, not npm or yarn.');process.exit(1)}\"",
     "prepare": "git config core.hooksPath .agents/hooks/git"
