@@ -91,7 +91,8 @@ text under 14 px; `--ectoplasm` and `--ember` are used on dark surfaces only.
 
 Durations: 150 ms micro, 250 ms standard, 450 ms hero. Easing: spring for entrances,
 ease-out for exits. With `prefers-reduced-motion: reduce` every moment becomes an
-instant fade (no translate, no scale, no loops). Use `useReducedMotion()`.
+opacity-only fade of at most 150 ms (no translate, scale,
+blur or loops). Use `useReducedMotion()`.
 
 ## Layout and navigation
 

@@ -45,11 +45,13 @@ glance, so that GhostStock stands out.
 1. THE `/invocar` screen SHALL show the summoning-circle drop zone, accept drag and
    drop and file picking, and on phones offer a camera button
    (`capture="environment"`).
-2. IF the file is not JPEG, PNG or WebP, or is over 5 MB, THEN THE web app SHALL show
-   an inline Spanish error and SHALL NOT upload.
+2. IF the file is not JPEG, PNG or WebP, or the original is over 25 MB, THEN THE web
+   app SHALL show an inline Spanish error and SHALL NOT upload.
 3. WHEN a valid file is chosen, THE web app SHALL downscale it in the browser to at
    most 1568 px on the long edge, re-encode it as JPEG (quality 0.85) unless it is
    already smaller, and show a preview.
+4. IF the processed image is still over 3 750 000 bytes, THEN THE web app SHALL retry
+   the encode at quality 0.7 and, if still too large, show the size error.
 
 ### Requirement 4: Upload and resurrection (analysis)
 
@@ -79,14 +81,17 @@ know, so that the saved inventory is right.
 1. WHEN candidates arrive, THE web app SHALL animate them rising from the photo
    (staggered spring, ectoplasm glow) with the heading "Los productos han vuelto a la
    vida."
-2. EACH candidate card SHALL show the photo crop area, an editable name, a category
+2. EACH candidate card SHALL show the analyzed photo (full frame, no crops: the
+   contract has no bounding boxes), an editable name, a category
    select, an editable description, the brand if any, a confidence chip (alta, media,
    baja) with the model notes, and empty inputs for cantidad, precio unitario (COP)
    and SKU.
 3. THE web app SHALL let the user discard a candidate, restore it, and select or
    deselect it for saving.
-4. THE "Guardar seleccionados" action SHALL stay disabled until at least one selected
-   candidate has a valid name, category, quantity and unit price.
+4. THE "Guardar seleccionados" action SHALL be enabled only when at least one
+   candidate is selected and **every** selected candidate has a valid name, category,
+   quantity and unit price; invalid selected cards SHALL show their field errors, and
+   only selected candidates are sent.
 5. THE web app SHALL NOT prefill quantity, price or SKU.
 
 ### Requirement 6: Save
@@ -96,7 +101,9 @@ know, so that the saved inventory is right.
 #### Acceptance Criteria
 
 1. WHEN the user saves, THE web app SHALL call `POST /api/products` with the selected
-   reviewed products and the `imageKey`.
+   reviewed products and the `imageKey`, and SHALL disable the save action while the
+   request is in flight (a manual retry after a timeout may duplicate products; this
+   risk is accepted for the MVP).
 2. WHEN saving succeeds, THE web app SHALL show the toast "Tu almacén ha despertado.",
    refresh the product data and navigate to `/`, where the KPIs count up.
 3. IF saving fails, THEN THE web app SHALL keep every edit and show the error with a
@@ -157,7 +164,8 @@ without a mouse.
 2. THE web app SHALL contain no English user-visible text; all copy lives in
    `src/copy/es.ts`.
 3. WHEN `prefers-reduced-motion: reduce` is set, THE web app SHALL replace every
-   animation with an instant fade and stop all loops.
+   animation with an opacity-only fade of at most 150 ms (no translate, scale or blur)
+   and stop all loops.
 4. THE web app SHALL have no serious or critical axe violations on any screen and SHALL
    allow the full upload, review and save path by keyboard.
 
@@ -172,7 +180,12 @@ criterion.
    built from contract fixtures, with scenarios selected by `?scenario=` (`happy`,
    `empty`, `zero-candidates`, `model-error`, `throttled`, `network-error`).
 2. THE production build SHALL NOT include MSW.
-3. THE `e2e/web` Playwright projects SHALL cover Requirements 3 to 10 on desktop and
-   phone viewports, including axe checks and reduced motion.
+3. THE `e2e/web` Playwright projects SHALL cover Requirements 2 to 10 on desktop and
+   phone viewports, including axe checks and reduced motion; Requirement 1 SHALL be
+   covered by the `visual` baselines plus a Vitest check that no file under
+   `apps/web/src` except `styles/tokens.css` contains a hex color literal.
+5. IF an error response is not a valid `ApiError` envelope (HTTP API 429, CloudFront
+   5xx, empty body), THEN THE web app SHALL treat it as a generic retryable error with
+   its own Spanish message; a `204` response SHALL be accepted without a body.
 4. THE `visual` Playwright project SHALL keep screenshot baselines of every screen and
    state for local review.
