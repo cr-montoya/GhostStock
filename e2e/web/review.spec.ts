@@ -94,3 +94,14 @@ test("[02 6.3] a failed save keeps every edit and offers a retry", async ({ page
   await expect(card(page, 3).getByLabel("Precio unitario (COP)")).toHaveValue("3800");
   await expect(page.getByRole("button", { name: "Reintentar guardado" })).toBeEnabled();
 });
+
+test("[02 6.2] after saving, the dashboard starts at the top without horizontal overflow", async ({ page }) => {
+  await openRitual(page);
+  await summonCandidates(page);
+  await fill(page, 1, "24", "18900");
+  for (const n of [2, 3]) await card(page, n).getByRole("checkbox", { name: "Incluir al guardar" }).click();
+  await page.getByRole("button", { name: "Guardar seleccionados" }).click();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Tu almacén" })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
