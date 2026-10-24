@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { Annotations, Match } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
+import { CDK_ASSETS_CLI_VERSION } from "../lib/pipeline-stack.js";
 import { synth, TEST_CONNECTION_ARN } from "./helpers.js";
 
 type Project = { Properties: { Source: { BuildSpec: string }; Environment: Record<string, unknown> } };
@@ -148,11 +150,28 @@ describe("pipeline", () => {
         { Properties: { Stages: { Name: string; Actions: { Name: string; InputArtifacts?: { Name: string }[] }[] }[] } }
       >,
     )[0]!.Properties.Stages;
-    const sourceArtifact = stages[0]!.Actions[0]!.Name;
+    const sourceAction = stages[0]!.Actions[0] as unknown as { OutputArtifacts: { Name: string }[] };
+    const sourceArtifact = sourceAction.OutputArtifacts[0]!.Name;
     const prod = stages.find((s) => s.Name === "Prod")!;
     for (const name of ["Test", "Smoke"]) {
       const action = prod.Actions.find((a) => a.Name === name)!;
-      expect(JSON.stringify(action.InputArtifacts)).toContain(sourceArtifact.replace(/[^A-Za-z0-9]/g, "_").slice(0, 10));
+      expect(action.InputArtifacts).toEqual([{ Name: sourceArtifact }]);
     }
+  });
+
+  it("[03-infra-pipeline 2.2] pins the CDK CLI and cdk-assets that generated steps install", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    const installs = projects({ enableTests: true }).flatMap(
+      (p) => (p.spec.phases.install?.commands ?? []) as string[],
+    );
+    const npmGlobal = installs.filter((c) => c.startsWith("npm install -g"));
+    expect(npmGlobal.length).toBeGreaterThan(0);
+    expect(npmGlobal).toEqual(
+      expect.arrayContaining([
+        `npm install -g aws-cdk@${pkg.devDependencies["aws-cdk"]}`,
+        `npm install -g cdk-assets@${CDK_ASSETS_CLI_VERSION}`,
+      ]),
+    );
+    for (const command of npmGlobal) expect(command).not.toMatch(/@(latest|2)$/);
   });
 });

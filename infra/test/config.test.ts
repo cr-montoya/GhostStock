@@ -46,7 +46,11 @@ describe("config", () => {
   });
 
   it("[03-infra-pipeline 1.2] cdk.json holds no connection ARN, email or account id", () => {
-    const raw = readFileSync(join(import.meta.dirname, "../cdk.json"), "utf8");
-    expect(raw).not.toMatch(/connectionArn|budgetEmail|codeconnections|@|\b\d{12}\b/);
+    const { context } = JSON.parse(readFileSync(join(import.meta.dirname, "../cdk.json"), "utf8"));
+    expect(context).not.toHaveProperty("connectionArn");
+    expect(context).not.toHaveProperty("budgetEmail");
+    // Values only: feature flag names start with "@aws-cdk/".
+    const values = JSON.stringify(Object.values(context));
+    expect(values).not.toMatch(/codeconnections|[^\s"@]+@[^\s"@]+\.[a-z]+|\b\d{12}\b/);
   });
 });

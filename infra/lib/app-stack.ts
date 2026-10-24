@@ -91,18 +91,21 @@ export class GhostStockAppStack extends Stack {
     );
 
     const foundationModelId = config.bedrockModelId.replace(/^us\./, "");
+    const inferenceProfileArn = `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/${config.bedrockModelId}`;
     analyses.addToRolePolicy(
       new iam.PolicyStatement({ actions: ["s3:GetObject"], resources: [tmpObjects] }),
     );
     analyses.addToRolePolicy(listTmp);
     analyses.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ["bedrock:InvokeModel"], resources: [inferenceProfileArn] }),
+    );
+    // The profile routes to the model in any US region, but only through the profile:
+    // direct calls to the foundation model stay denied.
+    analyses.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel"],
-        resources: [
-          `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/${config.bedrockModelId}`,
-          // A cross-region inference profile routes to the model in any US region.
-          `arn:aws:bedrock:*::foundation-model/${foundationModelId}`,
-        ],
+        resources: [`arn:aws:bedrock:*::foundation-model/${foundationModelId}`],
+        conditions: { StringEquals: { "bedrock:InferenceProfileArn": inferenceProfileArn } },
       }),
     );
 

@@ -4,9 +4,12 @@ import * as codebuild from "aws-cdk-lib/aws-codebuild";
 import * as codepipeline from "aws-cdk-lib/aws-codepipeline";
 import * as pipelines from "aws-cdk-lib/pipelines";
 import type { Construct } from "constructs";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AppAssetPaths } from "./app-stack.js";
 import { GhostStockAppStage } from "./app-stage.js";
 import { suppressPipelineStackFindings } from "./nag.js";
+import { REPO_ROOT } from "./paths.js";
 
 // Syntactically valid but unusable: a pipeline deployed with it fails at its source
 // stage and nothing else. Lets `cdk synth`, `cdk diff` and tests run without secrets.
@@ -18,7 +21,13 @@ export const PLACEHOLDER_CONNECTION_ARN =
 export const BUILD_IMAGE = codebuild.LinuxBuildImage.STANDARD_8_0;
 export const NODE_RUNTIME = "22";
 
-const INSTALL = ["corepack enable", "pnpm install --frozen-lockfile"];
+// The CLI the pipeline installs matches the aws-cdk devDependency used locally.
+export const CDK_CLI_VERSION: string = JSON.parse(
+  readFileSync(join(REPO_ROOT, "infra/package.json"), "utf8"),
+).devDependencies["aws-cdk"];
+export const CDK_ASSETS_CLI_VERSION = "4.7.4";
+
+const INSTALL =["corepack enable", "pnpm install --frozen-lockfile"];
 const PLAYWRIGHT = "pnpm --filter @ghoststock/e2e exec playwright install --with-deps chromium";
 
 export interface GhostStockPipelineStackProps extends StackProps {
@@ -38,6 +47,12 @@ export class GhostStockPipelineStack extends Stack {
       Annotations.of(this).addWarningV2(
         "ghoststock:placeholder-connection",
         "connectionArn not set: using a placeholder. Pass -c connectionArn=... before deploying (docs/deployment.md).",
+      );
+    }
+    if (!config.budgetEmail) {
+      Annotations.of(this).addWarningV2(
+        "ghoststock:no-budget",
+        "budgetEmail not set: no cost budget or alert will be created. Pass -c budgetEmail=... when deploying (docs/deployment.md).",
       );
     }
     const source = pipelines.CodePipelineSource.connection(config.repo, config.branch, {
@@ -64,6 +79,10 @@ export class GhostStockPipelineStack extends Stack {
       pipelineName: "GhostStock",
       pipelineType: codepipeline.PipelineType.V2,
       selfMutation: true,
+      // CDK Pipelines installs these with npm in its generated steps; pinned so a CLI
+      // release cannot change the pipeline without a commit.
+      cliVersion: CDK_CLI_VERSION,
+      cdkAssetsCliVersion: CDK_ASSETS_CLI_VERSION,
       // Single account: no cross-account KMS key (saves its monthly cost).
       crossAccountKeys: false,
       synth,
@@ -117,6 +136,6 @@ export class GhostStockPipelineStack extends Stack {
     // Suppressions target the generated CodePipeline resources, which exist only
     // after buildPipeline().
     this.pipeline.buildPipeline();
-    suppressPipelineStackFindings(this.pipeline);
+    suppressPipelineStackFindings(this, this.pipeline);
   }
 }

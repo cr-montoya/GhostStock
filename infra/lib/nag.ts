@@ -21,7 +21,9 @@ const NO_ACCESS_LOGS: NagPackSuppression = {
 const BASIC_EXECUTION_ROLE: NagPackSuppression = {
   id: "AwsSolutions-IAM4",
   reason: "AWSLambdaBasicExecutionRole only grants writing to CloudWatch Logs.",
-  appliesTo: ["Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"],
+  appliesTo: [
+    regex("^Policy::arn:(<AWS::Partition>|aws):iam::aws:policy\\/service-role\\/AWSLambdaBasicExecutionRole$"),
+  ],
 };
 
 export interface AppStackNagTargets {
@@ -50,7 +52,7 @@ export function suppressAppStackFindings(stack: Stack, t: AppStackNagTargets): v
     {
       id: "AwsSolutions-CFR4",
       reason:
-        "The default *.cloudfront.net certificate fixes the viewer security policy (CDK ignores minimumProtocolVersion without a certificate); TLS 1.2 minimum arrives with a custom domain (ADR 0006 follow-up).",
+        "The default *.cloudfront.net certificate fixes the viewer security policy (CDK ignores minimumProtocolVersion without a certificate); TLS 1.2 minimum arrives with a custom domain (spec 03 requirement 6.4).",
     },
   ]);
   for (const bucket of t.buckets) suppress(bucket, [NO_ACCESS_LOGS]);
@@ -86,7 +88,7 @@ export function suppressAppStackFindings(stack: Stack, t: AppStackNagTargets): v
           regex("^Action::s3:(GetObject|GetBucket|List|DeleteObject|Abort)\\*$"),
           regex("^Resource::<Frontend[A-Za-z0-9]+\\.Arn>\\/\\*$"),
           regex("^Resource::\\*$"),
-          regex("^Resource::arn:<AWS::Partition>:s3:::cdk-[a-z0-9]+-assets-.+\\/\\*$"),
+          regex("^Resource::arn:(<AWS::Partition>|aws):s3:::cdk-[a-z0-9]+-assets-.+\\/\\*$"),
         ],
       },
       {
@@ -97,7 +99,7 @@ export function suppressAppStackFindings(stack: Stack, t: AppStackNagTargets): v
   }
 }
 
-export function suppressPipelineStackFindings(pipeline: IConstruct): void {
+export function suppressPipelineStackFindings(stack: Stack, pipeline: IConstruct): void {
   suppress(pipeline, [
     {
       id: "AwsSolutions-CB4",
@@ -111,11 +113,27 @@ export function suppressPipelineStackFindings(pipeline: IConstruct): void {
       appliesTo: [
         regex("^Action::s3:(GetObject|GetBucket|List|DeleteObject|Abort)\\*$"),
         regex("^Resource::<PipelineArtifactsBucket[A-Za-z0-9]+\\.Arn>\\/\\*$"),
-        regex("^Resource::arn:<AWS::Partition>:(logs|codebuild):[a-z0-9-]+:[0-9]+:(log-group:\\/aws\\/codebuild\\/|report-group\\/).*\\*$"),
+        regex(
+          "^Resource::arn:(<AWS::Partition>|aws):(logs|codebuild):[a-z0-9-]+:[0-9]+:(log-group:\\/aws\\/codebuild\\/|report-group\\/).*\\*$",
+        ),
         regex("^Resource::arn:\\*:iam::[0-9]+:role\\/\\*$"),
-        regex("^Resource::\\*$"),
       ],
     },
     NO_ACCESS_LOGS,
   ]);
+  // `*` resources only on the two CDK-generated roles that need them, so a `*` added
+  // anywhere else in the pipeline still fails synth.
+  for (const path of [
+    "Pipeline/Assets/FileRole/DefaultPolicy/Resource",
+    "Pipeline/UpdatePipeline/SelfMutation/Role/DefaultPolicy/Resource",
+  ]) {
+    NagSuppressions.addResourceSuppressionsByPath(stack, `/${stack.stackName}/${path}`, [
+      {
+        id: "AwsSolutions-IAM5",
+        reason:
+          "CDK Pipelines grants codebuild:StartBuild/BatchGetBuilds/StopBuild (assets) and cloudformation:DescribeStacks, s3:ListBucket (self-mutation) on *.",
+        appliesTo: [regex("^Resource::\\*$")],
+      },
+    ]);
+  }
 }
