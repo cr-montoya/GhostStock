@@ -20,10 +20,10 @@ the photo goes straight from the browser to S3 without passing through the API.
 1. WHEN `POST /api/uploads` receives a valid `CreateUploadRequest`, THE uploads
    function SHALL return `201` with a presigned POST for key `tmp/<ulid>.<ext>`,
    `Content-Type` fixed to the requested type, `content-length-range` 1 to
-   5 242 880 and expiry 300 s.
+   3 750 000 and expiry 300 s.
 2. IF `contentType` is not allowed, THEN THE API SHALL return `415
    UNSUPPORTED_MEDIA_TYPE`.
-3. IF `sizeBytes` exceeds 5 242 880, THEN THE API SHALL return `413 IMAGE_TOO_LARGE`.
+3. IF `sizeBytes` exceeds 3 750 000, THEN THE API SHALL return `413 IMAGE_TOO_LARGE`.
 
 ### Requirement 2: Photo analysis
 
@@ -36,7 +36,7 @@ I do not type my inventory by hand.
    read the object metadata, then its bytes, call Bedrock Converse once with the image
    and the `report_products` tool forced, and return `200` with an `Analysis`.
 2. IF the object does not exist, THEN THE API SHALL return `404 IMAGE_NOT_FOUND`.
-3. IF the stored object is larger than 5 242 880 bytes or its content type is not
+3. IF the stored object is larger than 3 750 000 bytes or its content type is not
    allowed, THEN THE API SHALL return `413 IMAGE_TOO_LARGE` or
    `415 UNSUPPORTED_MEDIA_TYPE` without calling Bedrock.
 4. THE analyses function SHALL assign a ULID `candidateId` to each candidate and
@@ -54,14 +54,18 @@ so that the app never shows invented products.
 2. IF the response has no `report_products` tool call, a `stopReason` other than
    `tool_use`, or the tool input fails `ModelOutputSchema`, THEN THE API SHALL return
    `502 MODEL_INVALID_OUTPUT` and SHALL NOT return partial candidates.
-3. WHEN Bedrock throws `ThrottlingException`, `ServiceUnavailableException`,
-   `ModelNotReadyException` or `ModelTimeoutException`, THE analyses function SHALL
-   retry at most 2 times (400 ms, 1200 ms) and then return `503 MODEL_THROTTLED`.
+3. WHEN Bedrock throws `ThrottlingException` or `ServiceUnavailableException`, THE
+   analyses function SHALL retry at most 2 times (400 ms, 1200 ms) while time remains
+   in the 25 s deadline, and then return `503 MODEL_THROTTLED`; a
+   `ModelTimeoutException` or the deadline itself SHALL return `503 MODEL_THROTTLED`
+   without further retries.
 4. IF Bedrock throws `AccessDeniedException`, `ResourceNotFoundException` or a
    `ValidationException` about the model, THEN THE API SHALL return
    `503 MODEL_UNAVAILABLE`.
-5. THE analyses function SHALL issue at most one successful Converse call per request
-   and SHALL abort the SDK call after 25 s.
+5. THE analyses function SHALL issue at most one successful Converse call per request,
+   configure the Bedrock client with `maxAttempts: 1` (retries are ours only), and
+   enforce one overall 25 s deadline across all attempts, so the response is always the
+   JSON envelope and never a Lambda timeout.
 
 ### Requirement 4: Save reviewed products
 
