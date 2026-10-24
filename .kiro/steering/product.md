@@ -1,47 +1,62 @@
+---
+inclusion: always
+---
+
 # Product: GhostStock
 
 > **Bring Your Inventory Back From the Dead.**
 
+How we work (specs, gates, agents, git): #[[file:AGENTS.md]]
+
 ## Vision
 
-Photograph physical products, let Amazon Bedrock propose structured product candidates,
-review and save them, then manage a searchable inventory dashboard with stats and CSV
-export.
+Turn physical products into a usable digital inventory in seconds. The user
+photographs products, Amazon Bedrock identifies product candidates, the user reviews
+and completes them, and the inventory comes alive in a premium, Halloween-flavored
+dashboard with search, filters, stats and CSV export.
 
-**North star:** upload photo → analyze with Bedrock → review → save → dashboard.
-Everything else is secondary.
+**North star (the only thing that must work end to end):**
+upload photo -> analyze with Bedrock -> review -> save -> dashboard.
 
-**Event context:** Built for Kiro Day Medellin 2026.
+## Division of truth between AI and user
 
-## User journey (happy path)
+| Field | Who provides it |
+| --- | --- |
+| name, category, description, brand (optional) | Bedrock proposes, user can edit |
+| confidence (high / medium / low), uncertainty notes | Bedrock, read-only |
+| quantity, unit price (COP), SKU (optional) | **User only.** The model never proposes them |
 
-1. User opens the app (in Spanish).
-2. User uploads a product photo (JPEG / PNG / WEBP, ≤ 5 MB).
-3. App sends the image to the API, which calls Bedrock.
-4. Bedrock returns up to 5 product candidates: name, description, category, estimated
-   price, quantity, SKU hint, barcode.
-5. User reviews the candidates, edits fields if needed, and saves one or more items.
-6. Items appear immediately in the inventory dashboard.
-7. User can search, filter, view stats, and export to CSV.
+The model never invents prices, SKUs, barcodes or quantities. Zero detections is a
+valid, honest outcome, never an error disguised as success or a fabricated result.
+
+## User journey
+
+1. Opens the app on the dashboard ("Tu almacén"). Empty warehouse -> ghost empty
+   state with one call to action: "Invocar inventario".
+2. Takes or uploads a photo (JPEG, PNG, WebP, up to 5 MB). The browser downscales it.
+3. Resurrection screen while Bedrock analyzes ("Invocando tu inventario...").
+4. Candidates rise as editable cards ("Los productos han vuelto a la vida.").
+5. User removes false detections, edits names and categories, enters quantity, unit
+   price and optional SKU, and saves the selected ones.
+6. Dashboard: total products, total units, inventory value, categories, low stock.
+7. Inventory: search, category filter, edit, delete, CSV export.
 
 ## Personas
 
-- **Primary:** small-business owner or stockroom worker with physical goods and no
-  digital catalog. Non-technical, mobile-first, works in Spanish.
-- **Secondary:** hackathon judge evaluating a live demo in under three minutes.
+- **Primary:** small shop owner or stockroom worker in Colombia, phone first,
+  non-technical, Spanish speaking.
+- **Secondary:** hackathon judge watching a live demo of under three minutes.
 
-## Out of scope (v1)
+## Scope
 
-- Multi-user / authentication (single-user demo).
-- Real barcode scanning (AI proposes, user confirms).
-- Bulk / multi-photo upload in one step.
-- Price lookup from external data sources.
-- Offline mode.
+- Single inventory workspace, no authentication, no multi-tenancy.
+- Out of scope: Cognito, payments, barcode scanning, price lookup, bulk multi-photo
+  upload, offline mode, bounding boxes, image generation, custom models, agents.
 
-## Success criteria (demo)
+## Demo success criteria
 
-- Photo → analyzed candidates on screen in < 5 s on a standard connection.
-- Zero fabricated results: invalid or empty Bedrock output surfaces a clear error state.
-- Dashboard shows total items, total estimated value, top category.
-- CSV export downloads cleanly.
-- UI is fully in Spanish with no English strings visible to the user.
+- Photo to candidates on screen in under 10 s for a typical photo.
+- Zero fabricated results; every failure has an explicit Spanish state.
+- Dashboard KPIs update right after saving.
+- CSV opens correctly in Excel (UTF-8 BOM, Spanish headers).
+- Not a single English string visible in the UI.
