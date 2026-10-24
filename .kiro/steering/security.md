@@ -24,8 +24,11 @@ cdk-nag suppression and a written reason.
 | Function | Allowed |
 | --- | --- |
 | uploads | `s3:PutObject` on `media-bucket/tmp/*` (needed to sign the presigned POST) |
-| analyses | `s3:GetObject` on `media-bucket/tmp/*`; `bedrock:InvokeModel` on the configured inference profile and its foundation models |
-| inventory | `dynamodb:GetItem, PutItem, UpdateItem, DeleteItem, Query, BatchWriteItem` on the table; `s3:GetObject` on `tmp/*`; `s3:PutObject` on `media/products/*` |
+| analyses | `s3:GetObject` on `media-bucket/tmp/*`; `s3:ListBucket` on the bucket with condition `s3:prefix` = `tmp/*`; `bedrock:InvokeModel` on the configured inference profile and its foundation models |
+| inventory | `dynamodb:GetItem, PutItem, UpdateItem, DeleteItem, Query, BatchWriteItem` on the table; `s3:GetObject` on `tmp/*`; `s3:ListBucket` with condition `s3:prefix` = `tmp/*`; `s3:PutObject` on `media/products/*` |
+
+`s3:ListBucket` is required so S3 answers a missing key with 404 instead of 403;
+without it `IMAGE_NOT_FOUND` could never be detected.
 
 cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a reason.
 
@@ -37,7 +40,7 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
   and `media/products/<ulid>.<ext>` (saved product photos, kept).
 - Presigned POST: exact key `tmp/<ulid>.<ext>` chosen by the server, `Content-Type`
   equal to the requested one (`image/jpeg | image/png | image/webp`),
-  `content-length-range` 1 to 5 242 880, expiry 300 s.
+  `content-length-range` 1 to 3 750 000, expiry 300 s.
 - Media bucket CORS allows `POST` from any origin: the signed policy is the
   authorization, and a distribution-scoped origin would create a CloudFormation cycle
   (ADR 0006). No other method is allowed by CORS.
@@ -71,11 +74,14 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
   ```
   default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data:; font-src 'self';
-  connect-src 'self' https://<media-bucket>.s3.<region>.amazonaws.com;
+  connect-src 'self' https://<media-bucket>.s3.<region>.amazonaws.com
+              https://<media-bucket>.s3.amazonaws.com;
   frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   ```
   `'unsafe-inline'` for styles only (Motion writes inline style attributes). Fonts are
-  self-hosted (no third-party font CDN).
+  self-hosted (no third-party font CDN). Both S3 host forms are listed because the
+  presigned POST URL host and the CloudFormation regional domain can differ in
+  us-east-1; a unit test asserts the presign URL host is in the CSP.
 - `/api/*`: caching disabled, all viewer headers except Host forwarded.
 - SPA routing via a CloudFront Function on the default behavior (rewrite extensionless
   paths to `/index.html`), never via distribution-wide error responses, which would
@@ -89,7 +95,7 @@ cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a re
 ## Cost guardrails
 
 - AWS Budgets monthly cost budget of 20 USD with email alerts at 80% and 100%.
-- Throttling + reserved concurrency + 5 MB upload cap bound Bedrock spend.
+- Throttling + reserved concurrency + 3.75 MB upload cap (the Bedrock Converse per-image limit) bound Bedrock spend.
 
 ## Supply chain
 
