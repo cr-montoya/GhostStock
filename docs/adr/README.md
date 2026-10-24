@@ -18,4 +18,5 @@ The `commit-msg` gate enforces ADRs for architecture-signal commits (see 0001).
 | [0010](0010-api-runtime-dependencies.md) | API runtime dependencies | accepted |
 | [0011](0011-pnpm-workspaces.md) | pnpm is the only package manager (workspaces, corepack, `workspace:*`) | accepted |
 | [0012](0012-default-model-amazon-nova-pro.md) | Default Bedrock model is Amazon Nova Pro (no Anthropic form needed) | accepted |
-| [0013](0013-manual-teardown-keeps-the-pipeline.md) | Manual teardown project that deletes the app and keeps the pipeline | accepted |
+| [0013](0013-manual-teardown-keeps-the-pipeline.md) | Manual teardown project that deletes the app and keeps the pipeline | superseded by 0014 |
+| [0014](0014-manual-teardown-stage-after-prod.md) | Manual approval teardown stage after Prod that deletes the app and keeps the pipeline | accepted |

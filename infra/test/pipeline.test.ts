@@ -177,18 +177,22 @@ describe("pipeline", () => {
     for (const command of npmGlobal) expect(command).not.toMatch(/@(latest|2)$/);
   });
 
-  it("[ADR 0013] manual teardown project deletes only the app stack and is not a pipeline step", () => {
+  it("[ADR 0014] teardown stage after Prod: manual approval, then delete only the app stack", () => {
     const { pipeline } = synth({ connectionArn: TEST_CONNECTION_ARN });
-    const teardown = Object.values(
-      pipeline.findResources("AWS::CodeBuild::Project", { Properties: { Name: "GhostStock-Teardown" } }),
-    ) as Project[];
-    expect(teardown).toHaveLength(1);
-    const commands = commandsOf(JSON.parse(teardown[0]!.Properties.Source.BuildSpec));
-    expect(commands).toEqual([
+    const [resource] = Object.values(pipeline.findResources("AWS::CodePipeline::Pipeline")) as {
+      Properties: { Stages: { Name: string; Actions: { Name: string; ActionTypeId: { Category: string }; RunOrder: number }[] }[] };
+    }[];
+    const stages = resource!.Properties.Stages.map((s) => s.Name);
+    expect(stages.indexOf("Teardown")).toBeGreaterThan(stages.indexOf("Prod"));
+    const teardown = resource!.Properties.Stages.find((s) => s.Name === "Teardown")!;
+    const approval = teardown.Actions.find((a) => a.ActionTypeId.Category === "Approval")!;
+    const build = teardown.Actions.find((a) => a.ActionTypeId.Category === "Build")!;
+    expect(approval).toBeDefined();
+    expect(build.RunOrder).toBeGreaterThan(approval.RunOrder);
+    const destroy = findStep({ connectionArn: TEST_CONNECTION_ARN }, "delete-stack");
+    expect(commandsOf(destroy!.spec)).toEqual([
       "aws cloudformation delete-stack --stack-name Prod-GhostStockAppStack",
       "aws cloudformation wait stack-delete-complete --stack-name Prod-GhostStockAppStack",
     ]);
-    const stages = JSON.stringify(pipeline.findResources("AWS::CodePipeline::Pipeline"));
-    expect(stages).not.toContain("Teardown");
   });
 });

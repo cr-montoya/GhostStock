@@ -64,9 +64,8 @@ go-ahead.
   - `pnpm --filter @ghoststock/infra test`, `pnpm exec cdk synth`, `spec-sync`.
   - _Requirements: 10.1, 10.3_
 
-- [x] 11. Manual teardown (ADR 0013)
-  - `GhostStock-Teardown` CodeBuild project in the pipeline stack, outside the
-    pipeline, role limited to deleting the app stack; `TeardownProject` output;
-    `docs/deployment.md` step 8.
-  - Tests: project exists, is not a pipeline action, least-privilege role.
+- [x] 11. Manual teardown stage (ADR 0014, supersedes 0013)
+  - `Teardown` wave after Prod: `ApproveTeardown` manual approval, then `DestroyApp`
+    CodeBuild step limited to deleting the app stack; `docs/deployment.md` step 8.
+  - Tests: stage comes after Prod, approval runs before the build, exact commands.
   - _Requirements: 10.3, 11.1_

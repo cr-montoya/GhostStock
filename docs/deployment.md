@@ -153,15 +153,20 @@ the deploy.
 
 ## 8. Teardown (owner only)
 
-### Stop paying, keep the pipeline ([ADR 0013](adr/0013-manual-teardown-keeps-the-pipeline.md))
+### Stop paying, keep the pipeline ([ADR 0014](adr/0014-manual-teardown-stage-after-prod.md))
+
+Every run ends waiting at the `Teardown` stage, after Prod. To delete the app, approve
+`ApproveTeardown` in the CodePipeline console, or from the CLI:
 
 ```sh
-aws codebuild start-build --project-name GhostStock-Teardown --region us-east-1
+TOKEN=$(aws codepipeline get-pipeline-state --name GhostStock --region us-east-1 --query "stageStates[?stageName=='Teardown'].actionStates[0].latestExecution.token" --output text)
+aws codepipeline put-approval-result --pipeline-name GhostStock --stage-name Teardown --action-name ApproveTeardown --token "$TOKEN" --result summary="tear down",status=Approved --region us-east-1
 ```
 
-Deletes `Prod-GhostStockAppStack` (both buckets are emptied automatically through
-`autoDeleteObjects`) and keeps the pipeline, which costs nothing while idle. The project
-is never part of a pipeline run. To bring the app back, start the pipeline:
+`DestroyApp` then deletes `Prod-GhostStockAppStack` (both buckets are emptied
+automatically through `autoDeleteObjects`) and keeps the pipeline, which costs nothing
+while idle. Leaving the approval unanswered changes nothing; it expires after 7 days.
+To bring the app back, start the pipeline:
 
 ```sh
 aws codepipeline start-pipeline-execution --name GhostStock --region us-east-1
