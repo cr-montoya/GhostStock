@@ -1,78 +1,125 @@
-# UI Identity
+---
+inclusion: fileMatch
+fileMatchPattern: "apps/web/**"
+---
 
-## Language
+# UI identity
 
-All user-visible strings are in **Spanish**. No English text reaches the UI. Code,
-comments, specs, docs, and commits are in English.
+The UI is a judging criterion. "It works" is not enough: it must feel premium,
+cinematic and unmistakably GhostStock. Review every screen with the `visual-qa` skill.
 
-## Design principles
+## Mood
 
-1. **Mobile-first.** The primary persona is a stockroom worker with a phone. Layout
-   breakpoints: base (mobile) → `md` (tablet) → `lg` (desktop).
-2. **Purposeful motion.** Animations communicate state changes, not decoration.
-   Every animation respects `prefers-reduced-motion: reduce`.
-3. **Four explicit states.** Every screen has loading, empty, error, and success states
-   modeled in the component. None is implicit or silently missing.
-4. **Accessible by default.** WCAG 2.1 AA minimum. Semantic HTML, visible focus rings,
-   sufficient color contrast, ARIA labels where native semantics fall short.
+A haunted warehouse at night, lit by violet glow and green ectoplasm. Linear or
+Vercel grade SaaS polish with Halloween personality. Elegant, never childish: no
+cartoon pumpkins, no bats, no dripping fonts, no clutter, no gimmicks that hurt
+legibility.
 
-## Design tokens
+## Language and voice
 
-All colors, radii, spacing and type scales live as CSS custom properties wired into
-Tailwind's config and into shadcn/ui's theme. No raw hex values in component files.
+- Every visible string in Spanish (Colombia). Code, specs and commits in English.
+- Voice: confident, a little theatrical, always clear. The theme lives in headlines
+  and moments; buttons, labels and errors stay plain and actionable.
+- All copy lives in `apps/web/src/copy/es.ts` (one place, easy to review).
 
-```
---color-brand-500      primary action color
---color-brand-600      hover / pressed
---color-surface        page background
---color-surface-raised card / panel background
---color-text-primary   body text
---color-text-secondary muted / helper text
---color-destructive    error, delete
---color-success        confirmed save
---radius-card          card border radius
-```
+Signature copy:
 
-Specific values are set in `apps/web/src/styles/tokens.css` and extended in
-`tailwind.config.ts`.
+| Moment | Copy |
+| --- | --- |
+| App tagline | "Trae tu inventario de vuelta de la muerte." |
+| Primary CTA | "Invocar inventario" |
+| Uploading | "Preparando el ritual..." |
+| Analyzing (rotating) | "Invocando tu inventario...", "Identificando productos...", "Leyendo etiquetas en la penumbra...", "Despertando a los fantasmas del almacén..." |
+| Candidates ready | "Los productos han vuelto a la vida." |
+| First save | "Tu almacén ha despertado." |
+| Zero detections | "No logramos ver productos en esta foto. Prueba con más luz o más cerca." |
+| Empty inventory | "Tu almacén está en silencio. Invoca tu primer producto." |
 
-## Component library
+## Design tokens (dark only)
 
-shadcn/ui components only. No third-party UI component libraries are added without
-an ADR. Custom components are built from shadcn primitives and Radix UI.
+Defined once as CSS variables in `apps/web/src/styles/tokens.css`, mapped to Tailwind
+theme and shadcn/ui variables. No raw hex in components.
 
-## Motion
+| Token | Value | Use |
+| --- | --- | --- |
+| `--bg` | `#07060B` | page background |
+| `--surface` | `#0F0C17` | cards, panels |
+| `--surface-raised` | `#171226` | popovers, drawers, hover |
+| `--border` | `rgba(167,139,250,0.14)` | hairlines, card inner border |
+| `--text` | `#EDE9FE` | primary text |
+| `--muted` | `#8B85A3` | secondary text |
+| `--violet` | `#7C3AED` | primary actions, focus ring |
+| `--violet-soft` | `#A78BFA` | highlights, links, charts |
+| `--ectoplasm` | `#39FF88` | success, "resurrected", saved |
+| `--ember` | `#FF8A3D` | warnings, low stock |
+| `--blood` | `#F43F5E` | destructive only |
+| `--radius` | `14px` | cards; `10px` inputs, `999px` chips |
 
-Framer Motion (imported as `motion` from `framer-motion`) for:
-- Page / route transitions: fade + subtle upward translate.
-- List item entry: staggered fade-in (max 5 items, 60 ms stagger).
-- Upload progress: indeterminate spinner → checkmark on success.
-- Toast / notification: slide in from bottom-right, auto-dismiss 4 s.
+Contrast: body text on `--bg` and `--surface` meets WCAG AA; never place `--muted`
+text under 14 px; `--ectoplasm` and `--ember` are used on dark surfaces only.
 
-Animation durations: 150 ms (micro), 250 ms (standard), 400 ms (page). Use
-`useReducedMotion()` to disable or simplify all animations when the user prefers.
+## Typography
 
-## Key screens
+- Display: **Fraunces** (variable, optical size), for headings and big numbers.
+- Body: **Geist**. Mono: **Geist Mono** for SKU, prices and counters.
+- Self-hosted via `@fontsource-variable/*` (CSP `font-src 'self'`).
+- Tabular numerals for all money and counts. Money: `Intl.NumberFormat("es-CO",
+  { style: "currency", currency: "COP", maximumFractionDigits: 0 })`.
+- Scale: 12 / 14 / 16 / 20 / 28 / 40 / 56 px.
 
-### Upload & analyze (`/`)
-- Large drag-and-drop zone with a camera icon; tap to open file picker on mobile.
-- Preview thumbnail immediately after selection.
-- Progress bar while the API call is in flight.
-- Error state: descriptive message in Spanish with a retry button.
+## Light, texture, depth
 
-### Review candidates (`/revisar`)
-- Card list of up to 5 Bedrock candidates.
-- Each card: name, category badge, estimated price, editable quantity.
-- Inline edit for name, description, price, quantity before saving.
-- "Guardar seleccionados" CTA; disabled until at least one item is checked.
+- Subtle film grain overlay (SVG noise, 4% opacity, fixed, pointer-events none).
+- Radial violet glows behind hero sections; faint fog layer drifting slowly (CSS
+  gradient animation, GPU cheap, paused under reduced motion).
+- Glass cards: `--surface` at 80% with backdrop blur, 1 px inner border, soft shadow.
+- Success glow: `--ectoplasm` box-shadow pulse, once, never looping.
 
-### Inventory dashboard (`/inventario`)
-- Stat row: total items, total estimated value, top category.
-- Searchable, sortable table or card grid (responsive).
-- Filter by category chip group.
-- "Exportar CSV" button top-right.
-- Empty state: illustration + "Aún no tienes productos. ¡Empieza subiendo una foto!"
+## Signature moments (Motion, `motion/react`)
 
-### Item detail / edit (`/inventario/:id`)
-- Full editable form; save and delete actions.
-- Delete requires a confirmation dialog.
+1. **The ritual (upload).** Drop zone styled as a summoning circle: concentric violet
+   rings that breathe on hover and spin slowly while dragging. On phones a large
+   button opens the camera (`capture="environment"`).
+2. **The resurrection (analysis).** The photo appears in a frame; a spectral scan line
+   sweeps top to bottom on loop, fog rises from the bottom edge, and the rotating
+   status copy changes every 1.8 s.
+3. **Rising candidates.** Cards emerge from the photo position with a staggered spring
+   (80 ms stagger), fading from blur to sharp with a brief ectoplasm glow.
+   Confidence shows as a chip: alta (ectoplasm), media (violet soft), baja (ember).
+4. **The awakening (save).** KPI numbers count up; toast "Tu almacén ha despertado."
+5. **Empty states.** Inline SVG ghost drifting over empty shelves, one clear CTA.
+
+Durations: 150 ms micro, 250 ms standard, 450 ms hero. Easing: spring for entrances,
+ease-out for exits. With `prefers-reduced-motion: reduce` every moment becomes an
+instant fade (no translate, no scale, no loops). Use `useReducedMotion()`.
+
+## Layout and navigation
+
+- Mobile first. Bottom tab bar on phones (Almacén, Invocar, Inventario, Ajustes);
+  slim left sidebar on desktop.
+- Global command palette (shadcn `Command`, Ctrl+K / Cmd+K) to search products and
+  jump to screens.
+- Toasts with `sonner`, bottom center on phones, bottom right on desktop.
+- Skeleton loaders shaped like the final content; never a lone spinner on a page.
+
+## Screens
+
+| Route | Name | Content |
+| --- | --- | --- |
+| `/` | Almacén (dashboard) | KPI cards (productos, unidades, valor del inventario, categorías), value by category chart, category distribution, low-stock list, recent resurrections |
+| `/invocar` | Invocar | ritual -> resurrection -> review, one route, three steps |
+| `/inventario` | Inventario | search, category chips, table on desktop and cards on phone, edit drawer, delete confirm, "Exportar CSV" |
+| `/ajustes` | Ajustes | low-stock threshold |
+
+Charts: shadcn charts (Recharts) themed with the tokens.
+
+## Components
+
+shadcn/ui primitives only (Radix). Any other UI library needs an ADR. Product photos
+always show with a dark frame and `object-cover`; missing photo shows a ghost glyph.
+
+## Accessibility
+
+WCAG 2.1 AA: semantic landmarks, labels on every input, visible violet focus ring,
+full keyboard path upload -> review -> save, `aria-live="polite"` on analysis status,
+touch targets of at least 44 px.
