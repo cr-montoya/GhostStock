@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { Providers } from "@/app/providers";
 import { router } from "@/app/router";
+import "@fontsource-variable/fraunces/opsz.css";
+import "@fontsource-variable/fraunces/opsz-italic.css";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "@/styles/globals.css";
 
 async function enableMocks() {
