@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useOutlet } from "react-router";
 import { Atmosphere } from "@/components/brand/Atmosphere";
 import { Logo } from "@/components/brand/Logo";
@@ -18,8 +18,13 @@ export function AppShell() {
   const reduce = useReducedMotion();
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
+  // Every screen starts at the top, so the dashboard KPIs are in view when a save lands.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   return (
-    <div className="relative min-h-dvh">
+    <div className="relative min-h-dvh overflow-x-clip">
       <a
         href="#contenido"
         className="sr-only z-[70] rounded-md bg-violet px-4 py-2 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
