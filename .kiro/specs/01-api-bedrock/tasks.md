@@ -46,7 +46,11 @@ The commit that creates `services/api/package.json` carries
 - [ ] 7. Playwright API tests
   - `e2e/api/*.spec.ts` per Requirement 9, using the fixture photos committed by
     02 task 1 in `e2e/fixtures/images/` (read only from this lane).
-  - Done when they pass against the first deployed stack (`BASE_URL`).
+  - Done when they pass against the first deployed stack (`BASE_URL`):
+    `BASE_URL=https://<distribution> pnpm --filter @ghoststock/e2e test:api`. `@bedrock`
+    tests call the real model. Specs run in order per file and retry only API Gateway
+    `429` (stage throttling). Created products are deleted; their photo under
+    `media/products/` is kept by design, and `tmp/` uploads expire after 1 day.
   - _Requirements: 9.2, 9.3_
 
 - [ ] 8. Verify and sync
