@@ -74,8 +74,9 @@ way everywhere, so that the inventory stays consistent.
 
 1. THE contracts package SHALL export `ProductFieldsSchema` with `name`, `category`,
    `description`, `brand` (optional), `sku` (optional, 1 to 64 chars of
-   `[A-Za-z0-9._-]`), `quantity` (integer 0 to 1 000 000) and `unitPriceCop`
-   (integer 0 to 1 000 000 000).
+   `[A-Za-z0-9._-]`), `quantity` (integer 0 to 100 000) and `unitPriceCop`
+   (integer 0 to 50 000 000), bounds chosen so 1 000 products never overflow exact
+   integer math in the inventory value.
 2. THE `ReviewedProductSchema` SHALL equal `ProductFieldsSchema` plus optional
    read-only provenance `aiConfidence` and `aiNotes`.
 3. THE `ProductSchema` SHALL equal `ReviewedProductSchema` plus `id` (ULID),
