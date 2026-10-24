@@ -114,6 +114,21 @@ Every ShellStep gets `input: source` explicitly: the synth output only contains
 before tests because contracts export `dist/` and `BucketDeployment` needs
 `apps/web/dist`.
 
+### Manual teardown (ADR 0013)
+
+The pipeline stack also defines a CodeBuild project `GhostStock-Teardown` that is
+never wired into the pipeline, so no merge or pipeline run can start it. A person
+starts it (`aws codebuild start-build --project-name GhostStock-Teardown`, see
+`docs/deployment.md` step 8); it runs `aws cloudformation delete-stack` on the app
+stack and waits for `stack-delete-complete`. Its role may only
+`cloudformation:DeleteStack` and `DescribeStacks` on the app stack and
+`iam:PassRole` the CDK bootstrap CloudFormation execution role (condition
+`iam:PassedToService = cloudformation.amazonaws.com`). Buckets empty themselves
+(`autoDeleteObjects`) and every app resource uses `RemovalPolicy.DESTROY`, so the stack
+leaves nothing behind; the pipeline, its artifacts bucket and logs stay. A V2 pipeline
+with no executions costs nothing, and starting it redeploys the app. The stack outputs
+`TeardownProject` with the project name.
+
 ## App stack
 
 | Resource | Key settings |
@@ -249,4 +264,14 @@ when email given; pipeline `selfMutation`, synth env vars, test steps only when
 `enableTests`, each with the source artifact as input, pinned CDK CLI and
 `cdk-assets`; config validation errors; `Annotations` has no cdk-nag errors; the Prod
 stage fails synth on an unhardened bucket (proves its aspect runs); every suppression
-has a reason; the SPA rewrite function source is run in a VM.
+has a reason; the SPA rewrite function source is run in a VM; the teardown project
+exists, is not part of the pipeline and its role is limited to the app stack.
+
+Smoke (`e2e/smoke/smoke.spec.ts`, Requirement 10.2) runs against `BASE_URL` with one
+worker (stage throttling; a `429` is retried with backoff): the dashboard renders in
+Spanish, an SPA deep link returns `index.html`, `GET /api/products` and
+`GET /api/settings` parse with the contract schemas, `POST /api/uploads` returns a
+contract-valid slot whose S3 origin is in the CSP `connect-src`, HSTS, CSP,
+`X-Frame-Options: DENY`, `nosniff` and the referrer policy are present, and an unknown
+`/api` path returns the JSON `NOT_FOUND` envelope. It never calls Bedrock and never
+creates products (an upload slot only signs a POST).
