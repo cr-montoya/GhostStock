@@ -1,105 +1,98 @@
+---
+inclusion: always
+---
+
 # Security
 
-All agents read this file before writing any code that touches IAM, S3, API Gateway,
-Lambda, DynamoDB, CloudFront, or Bedrock. Violations block the merge (see gate matrix
-in AGENTS.md).
+Every agent touching IAM, S3, API Gateway, Lambda, DynamoDB, CloudFront or Bedrock
+follows this file. Violations block the merge (`security-reviewer`, AGENTS.md).
 
-## Secrets
+## Secrets and identifiers
 
-- No secrets, credentials, API keys, or account IDs in source code, config files,
-  test fixtures, logs, or the frontend bundle.
-- Environment variables are injected by CDK at deploy time via `environment` on
-  `NodejsFunction`. Never hard-coded, never committed.
-- `.env*` files are git-ignored and must never be read by agents.
-- The pre-commit hook runs a secret scan on every staged file.
+- No secrets, credentials, account IDs, connection ARNs or emails committed anywhere:
+  code, `cdk.json`, fixtures, logs, docs, frontend bundle.
+- Deploy-time values (`connectionArn`, `budgetEmail`) are passed as `-c` context on the
+  first `cdk deploy` and persisted as CodeBuild environment variables by the pipeline
+  stack itself (spec 03). The account comes from the CLI credentials.
+- `.env*` is git-ignored and never read by agents. The pre-commit gate scans secrets.
 
-## IAM — least privilege
+## IAM, least privilege
 
-- Every Lambda function gets its own IAM role with only the actions it needs on
-  exactly the resources it owns (by ARN or ARN pattern, never `*` resource without a
-  written suppression comment).
-- Required actions by function:
-  | Function | Actions |
-  | --- | --- |
-  | `analyzeHandler` | `bedrock:InvokeModel`, `s3:GetObject` on the upload bucket (scoped to `uploads/*`) |
-  | `itemsWriteHandler` | `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:DeleteItem` on the items table |
-  | `itemsReadHandler` | `dynamodb:GetItem`, `dynamodb:Query`, `dynamodb:Scan` on the items table and its GSIs |
-  | `uploadPresignHandler` | `s3:PutObject` on the upload bucket (scoped to `uploads/*`) |
-- `cdk-nag` (`AwsSolutions` rule pack) runs at synth time. All findings are fixed or
-  suppressed with `NagSuppressions.addResourceSuppressions` and a written reason.
+One role per function, exact actions, exact resources. No `*` resource without a
+cdk-nag suppression and a written reason.
+
+| Function | Allowed |
+| --- | --- |
+| uploads | `s3:PutObject` on `media-bucket/tmp/*` (needed to sign the presigned POST) |
+| analyses | `s3:GetObject` on `media-bucket/tmp/*`; `bedrock:InvokeModel` on the configured inference profile and its foundation models |
+| inventory | `dynamodb:GetItem, PutItem, UpdateItem, DeleteItem, Query, BatchWriteItem` on the table; `s3:GetObject` on `tmp/*`; `s3:PutObject` on `media/products/*` |
+
+cdk-nag `AwsSolutions` runs at synth; findings are fixed or suppressed with a reason.
 
 ## S3
 
-- Upload bucket: Block Public Access enabled on all four settings. No bucket policy
-  that allows public reads.
-- Object access: CloudFront OAC for the SPA bucket; presigned URLs for upload reads
-  (short expiry, scoped key prefix `uploads/<ulid>`).
-- Presigned POST constraints:
-  - `Content-Type`: one of `image/jpeg`, `image/png`, `image/webp`.
-  - `content-length-range`: 1 byte to 5 242 880 bytes (5 MB).
-  - Expiry: 300 seconds.
-  - Key prefix: `uploads/` only.
-- Lifecycle rule: delete objects under `uploads/` after 1 day (they are only needed
-  for the Bedrock call).
+- Two buckets (web, media), Block Public Access on all four settings, SSE-S3,
+  `enforceSSL`, no ACLs. Reads only through CloudFront OAC.
+- Media key layout: `tmp/<ulid>.<ext>` (raw uploads, lifecycle delete after 1 day)
+  and `media/products/<ulid>.<ext>` (saved product photos, kept).
+- Presigned POST: exact key `tmp/<ulid>.<ext>` chosen by the server, `Content-Type`
+  equal to the requested one (`image/jpeg | image/png | image/webp`),
+  `content-length-range` 1 to 5 242 880, expiry 300 s.
+- Media bucket CORS allows `POST` from any origin: the signed policy is the
+  authorization, and a distribution-scoped origin would create a CloudFormation cycle
+  (ADR 0006). No other method is allowed by CORS.
+- Every `imageKey` received by the API must match
+  `^tmp/[0-9A-HJKMNP-TV-Z]{26}\.(jpg|png|webp)$` (no traversal, no foreign keys).
 
-## API Gateway
+## API Gateway and Lambda
 
-- HTTP API (not REST API). No API key auth for the demo (single-user, no PII).
-- Throttling: default route throttling 10 req/s burst, 5 req/s steady.
-- Payload limit: 10 MB (API Gateway default); the Lambda rejects images > 5 MB before
-  calling Bedrock.
-- All routes validate input with zod before any AWS SDK call.
-- CORS: allow origin set to the CloudFront distribution domain only (no wildcard in
-  production). Local dev may use `http://localhost:5173`.
-
-## Lambda
-
-- Runtime: `nodejs22.x`. No deprecated runtimes.
-- Memory: 256 MB for handlers (512 MB for `analyzeHandler` which fetches image
-  metadata). Timeout: 30 s (analyze), 10 s (CRUD), 5 s (presign).
-- Reserved concurrency on `analyzeHandler`: 5 (prevents runaway Bedrock spend).
-- Structured JSON logs via `console.log(JSON.stringify({...}))`. Never log:
-  image bytes, base64 strings, presigned URLs, full request bodies containing images,
-  or any field whose name contains `password`, `token`, `secret`, or `key`.
-- X-Ray tracing: `Active` for `analyzeHandler`; `PassThrough` for others.
+- HTTP API, no auth (single-workspace demo). Stage throttling: burst 10, rate 5.
+  Access logs enabled (JSON, 14 days).
+- Every route validates input with zod before any AWS SDK call. Bodies over 64 KB are
+  rejected (images never travel through the API).
+- Runtime `nodejs22.x`, arm64. Timeouts: analyses 28 s (under the 30 s HTTP API
+  limit), others 10 s. Memory: analyses 1024 MB, others 256 MB.
+- Reserved concurrency 5 on analyses (caps Bedrock spend).
+- Structured JSON logs (Powertools Logger). Never log image bytes, base64, presigned
+  URLs or POST fields. Log `requestId`, `imageKey`, `modelId`, latency, error code.
+- Log retention 14 days.
 
 ## DynamoDB
 
-- Encryption at rest: AWS-managed key (default). No unencrypted tables.
-- Point-in-time recovery: enabled.
-- No `Scan` with no filter expression in production code (use GSI queries).
-- All attribute names and values come through zod-validated objects; no raw string
-  concatenation into DynamoDB expressions.
+- On-demand, AWS-managed encryption, point-in-time recovery on.
+- No Scan in application code. Expressions built with placeholders only.
 
 ## CloudFront
 
-- HTTPS only. HTTP → HTTPS redirect. Minimum TLS 1.2.
-- Response headers policy: `Strict-Transport-Security`, `X-Content-Type-Options`,
-  `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
-  `Content-Security-Policy` (see below).
-- CSP for the SPA:
+- HTTPS only (redirect), TLS 1.2 minimum, HTTP/2 and 3.
+- Response headers policy: HSTS (1 year, includeSubDomains), `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  and CSP:
   ```
-  default-src 'self';
-  script-src 'self';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://<upload-bucket>.s3.<region>.amazonaws.com;
-  connect-src 'self' https://<api-domain>;
-  frame-ancestors 'none';
+  default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' blob: data:; font-src 'self';
+  connect-src 'self' https://<media-bucket>.s3.<region>.amazonaws.com;
+  frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   ```
-  The CDK construct fills in the actual bucket and API domain at synth time.
+  `'unsafe-inline'` for styles only (Motion writes inline style attributes). Fonts are
+  self-hosted (no third-party font CDN).
+- `/api/*`: caching disabled, all viewer headers except Host forwarded.
+- SPA routing via a CloudFront Function on the default behavior (rewrite extensionless
+  paths to `/index.html`), never via distribution-wide error responses, which would
+  swallow API 404s.
 
 ## Bedrock
 
-- Bedrock output is untrusted. It is validated with the zod schema from
-  `packages/contracts` before any use.
-- Never render raw Bedrock text output as HTML. All candidates are rendered as
-  plain text (React's default escaping is sufficient; no `dangerouslySetInnerHTML`).
-- Budget alarm: CloudWatch billing alarm at $20 USD notifies the owner's email.
-  Defined in the CDK stack.
+- Output is untrusted: validated with zod, rendered as plain text only, never as HTML.
+- One Converse call per analysis; retry only on throttling (2 retries, backoff).
+
+## Cost guardrails
+
+- AWS Budgets monthly cost budget of 20 USD with email alerts at 80% and 100%.
+- Throttling + reserved concurrency + 5 MB upload cap bound Bedrock spend.
 
 ## Supply chain
 
-- All new runtime dependencies require an ADR entry explaining why they were added and
-  confirming the package is the canonical, actively maintained one (no typosquatting).
-- `package-lock.json` is committed and must be up to date.
-- `npm audit` must report no Critical or High vulnerabilities before merge.
+- New runtime dependency in `services/api` or `infra`, or a new workspace, requires an
+  ADR (commit-msg gate). `package-lock.json` committed.
+- `npm audit --omit=dev` with no Critical or High before merge.
