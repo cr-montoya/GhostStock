@@ -1,7 +1,9 @@
 import type { InfraConfig } from "@ghoststock/contracts";
-import { Annotations, Stack, type StackProps } from "aws-cdk-lib";
+import { Annotations, CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import * as codebuild from "aws-cdk-lib/aws-codebuild";
 import * as codepipeline from "aws-cdk-lib/aws-codepipeline";
+import * as iam from "aws-cdk-lib/aws-iam";
+import { NagSuppressions } from "cdk-nag";
 import * as pipelines from "aws-cdk-lib/pipelines";
 import type { Construct } from "constructs";
 import { readFileSync } from "node:fs";
@@ -38,6 +40,7 @@ export interface GhostStockPipelineStackProps extends StackProps {
 export class GhostStockPipelineStack extends Stack {
   readonly pipeline: pipelines.CodePipeline;
   readonly prod: GhostStockAppStage;
+  readonly teardown: codebuild.Project;
 
   constructor(scope: Construct, id: string, props: GhostStockPipelineStackProps) {
     super(scope, id, props);
@@ -137,5 +140,62 @@ export class GhostStockPipelineStack extends Stack {
     // after buildPipeline().
     this.pipeline.buildPipeline();
     suppressPipelineStackFindings(this, this.pipeline);
+
+    this.teardown = this.addTeardownProject(this.prod.appStack.stackName);
+  }
+
+  /**
+   * Manual-only teardown (ADR 0013): deletes the app stack and keeps the pipeline, so
+   * nothing runs or bills until the pipeline is started again. It is not a pipeline
+   * step, so no merge or pipeline run can trigger it.
+   */
+  private addTeardownProject(appStackName: string): codebuild.Project {
+    const project = new codebuild.Project(this, "Teardown", {
+      projectName: "GhostStock-Teardown",
+      description: `Manual only. Deletes ${appStackName} and keeps the pipeline. Start the pipeline to redeploy.`,
+      environment: { buildImage: BUILD_IMAGE },
+      timeout: Duration.minutes(60),
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: "0.2",
+        phases: {
+          build: {
+            commands: [
+              `aws cloudformation delete-stack --stack-name ${appStackName}`,
+              `aws cloudformation wait stack-delete-complete --stack-name ${appStackName}`,
+            ],
+          },
+        },
+      }),
+    });
+    project.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["cloudformation:DeleteStack", "cloudformation:DescribeStacks"],
+        resources: [this.formatArn({ service: "cloudformation", resource: "stack", resourceName: `${appStackName}/*` })],
+      }),
+    );
+    // CloudFormation deletes with the role the stack was deployed with (CDK bootstrap).
+    project.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["iam:PassRole"],
+        resources: [`arn:${this.partition}:iam::${this.account}:role/cdk-hnb659fds-cfn-exec-role-${this.account}-${this.region}`],
+        conditions: { StringEquals: { "iam:PassedToService": "cloudformation.amazonaws.com" } },
+      }),
+    );
+    NagSuppressions.addResourceSuppressions(
+      project,
+      [
+        { id: "AwsSolutions-CB4", reason: "Manual teardown job without artifacts; S3-managed encryption avoids a KMS key cost." },
+        {
+          id: "AwsSolutions-IAM5",
+          reason: "The stack id suffix is unknown before deploy; scoped to the app stack name and to CodeBuild's own logs and reports.",
+        },
+      ],
+      true,
+    );
+    new CfnOutput(this, "TeardownProject", {
+      value: project.projectName,
+      description: "Start a build of this project to delete the app and keep the pipeline",
+    });
+    return project;
   }
 }

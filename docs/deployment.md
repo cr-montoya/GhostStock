@@ -149,6 +149,25 @@ the deploy.
 
 ## 8. Teardown (owner only)
 
+### Stop paying, keep the pipeline ([ADR 0013](adr/0013-manual-teardown-keeps-the-pipeline.md))
+
+```sh
+aws codebuild start-build --project-name GhostStock-Teardown --region us-east-1
+```
+
+Deletes `Prod-GhostStockAppStack` (both buckets are emptied automatically through
+`autoDeleteObjects`) and keeps the pipeline, which costs nothing while idle. The project
+is never part of a pipeline run. To bring the app back, start the pipeline:
+
+```sh
+aws codepipeline start-pipeline-execution --name GhostStock --region us-east-1
+```
+
+Remove any IAM policy added by hand to a stack role before tearing down, or the role
+deletion fails.
+
+### Delete everything
+
 Destroy the pipeline first, so a merge in between cannot redeploy the app. `cdk
 destroy` synthesizes the app, so build first:
 
