@@ -43,7 +43,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
     `network-error`, `zero-candidates` scenarios with retry.
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 7. Review and save
+- [x] 7. Review and save
   - `CandidateCard`, `ConfidenceChip`, `useReview`, save mutation, toast, navigation.
   - Playwright: no prefilled price or quantity, save disabled until valid, discard
     and restore, success navigates to `/` with toast, failure keeps edits.
