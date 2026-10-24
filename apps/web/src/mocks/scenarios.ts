@@ -1,4 +1,15 @@
-export const SCENARIOS = ["happy", "empty", "zero-candidates", "model-error", "throttled", "network-error"] as const;
+/** Spec scenarios plus test-only ones for save, list and mutation failures. */
+export const SCENARIOS = [
+  "happy",
+  "empty",
+  "zero-candidates",
+  "model-error",
+  "throttled",
+  "network-error",
+  "save-error",
+  "products-error",
+  "mutation-error",
+] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 const STORAGE_KEY = "ghoststock:scenario";
