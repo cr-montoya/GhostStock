@@ -32,12 +32,15 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
   if (draft.discarded) {
     return (
       <motion.article
-        layout={!reduce}
+        key="discarded"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: reduce ? 0.15 : 0.25 }}
         aria-labelledby={headingId}
         className="flex items-center gap-4 rounded-lg border border-dashed border-border-strong bg-surface/40 p-4"
       >
         <div className="min-w-0 flex-1">
-          <h3 id={headingId} className="font-sans text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          <h3 id={headingId} className="font-sans text-xs uppercase tracking-[0.14em] text-text/70">
             {label}
           </h3>
           <p className="truncate text-sm text-muted-foreground line-through">{draft.name}</p>
@@ -52,6 +55,7 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
 
   return (
     <motion.article
+      key="active"
       variants={reduce ? riseItemReduced : riseItem}
       aria-labelledby={headingId}
       className={cn(
@@ -59,17 +63,21 @@ export function CandidateCard({ draft, index, total, photoUrl, errors, disabled,
         draft.selected ? "border-violet-soft/25" : "opacity-70",
       )}
     >
-      <div className="grid gap-0 md:grid-cols-[220px_1fr]">
-        <div className="relative border-b border-border bg-bg md:border-b-0 md:border-r">
-          <img src={photoUrl} alt={copy.review.photoAlt(draft.name)} className="h-44 w-full object-contain md:h-full" />
-          <span className="absolute left-3 top-3 rounded-full border border-border-strong bg-bg/80 px-2.5 py-1 font-mono text-xs tabular text-muted-foreground backdrop-blur">
+      <div className="grid gap-0 md:grid-cols-[260px_1fr]">
+        <div className="relative border-b border-border bg-bg md:border-b-0 md:border-r md:p-3">
+          <img
+            src={photoUrl}
+            alt={copy.review.photoAlt(draft.name)}
+            className="h-44 w-full object-contain md:sticky md:top-6 md:h-auto md:rounded-lg md:border md:border-border"
+          />
+          <span className="absolute left-3 top-3 rounded-full md:left-5 md:top-5 border border-border-strong bg-bg/80 px-2.5 py-1 font-mono text-xs tabular text-muted-foreground backdrop-blur">
             {String(index + 1).padStart(2, "0")}
           </span>
         </div>
 
         <div className="flex flex-col gap-4 p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 id={headingId} className="font-sans text-xs uppercase tracking-[0.14em] text-muted-foreground">
+            <h3 id={headingId} className="font-sans text-xs uppercase tracking-[0.14em] text-text/70">
               {label}
             </h3>
             <ConfidenceChip confidence={draft.confidence} />
