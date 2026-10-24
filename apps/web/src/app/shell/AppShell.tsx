@@ -64,7 +64,7 @@ export function AppShell() {
 
       <TabBar />
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-      <Toaster position={isDesktop ? "bottom-right" : "bottom-center"} offset={isDesktop ? 24 : 88} />
+      <Toaster position={isDesktop ? "bottom-right" : "bottom-center"} offset={24} mobileOffset={{ bottom: 88 }} />
     </div>
   );
 }

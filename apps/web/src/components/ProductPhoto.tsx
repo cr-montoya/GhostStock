@@ -27,7 +27,10 @@ export function ProductPhoto({ src, alt, className }: ProductPhotoProps) {
       {url && !failed ? (
         <img src={url} alt={alt} loading="lazy" className="size-full object-cover" onError={() => setFailedSrc(src)} />
       ) : (
-        <div className="grid size-full place-items-center" role="img" aria-label={alt}>
+        <div
+          className="grid size-full place-items-center"
+          {...(alt ? { role: "img", "aria-label": alt } : { "aria-hidden": true })}
+        >
           <GhostGlyph className="size-1/2 max-h-12 max-w-12 opacity-40" />
         </div>
       )}

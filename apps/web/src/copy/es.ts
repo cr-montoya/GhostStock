@@ -18,7 +18,7 @@ export const copy = {
     inventory: "Inventario",
     settings: "Ajustes",
     skipToContent: "Saltar al contenido",
-    commandHint: "Buscar o saltar a...",
+    commandHint: "Buscar...",
   },
   command: {
     title: "Paleta de comandos",

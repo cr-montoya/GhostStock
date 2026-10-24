@@ -18,15 +18,21 @@ function CommandDialog({
   description,
   children,
   commandProps,
+  onCloseAutoFocus,
   ...props
 }: ComponentProps<typeof Dialog> & {
   title: string;
   description: string;
   commandProps?: ComponentProps<typeof CommandPrimitive>;
+  onCloseAutoFocus?: ComponentProps<typeof DialogContent>["onCloseAutoFocus"];
 }) {
   return (
     <Dialog {...props}>
-      <DialogContent className="top-[16%] translate-y-0 overflow-hidden p-0 sm:max-w-xl" showClose={false}>
+      <DialogContent
+        className="top-[16%] translate-y-0 overflow-hidden p-0 sm:max-w-xl"
+        showClose={false}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">{description}</DialogDescription>
         <Command
