@@ -161,6 +161,8 @@ describe("pipeline", () => {
 
   it("[03-infra-pipeline 2.2] pins the CDK CLI and cdk-assets that generated steps install", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    // cliVersion is read from this field, so a range here would unpin the pipeline CLI.
+    expect(pkg.devDependencies["aws-cdk"]).toMatch(/^\d+\.\d+\.\d+$/);
     const installs = projects({ enableTests: true }).flatMap(
       (p) => (p.spec.phases.install?.commands ?? []) as string[],
     );
