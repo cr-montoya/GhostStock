@@ -1,6 +1,40 @@
-import type { S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { MAX_UPLOAD_BYTES, type ImageContentType } from "@ghoststock/contracts";
+import { AppError } from "../lib/errors.js";
+
+const MISSING = new Set(["NotFound", "NoSuchKey"]);
+
+/** A missing object is `IMAGE_NOT_FOUND`; any other S3 failure is `STORAGE_ERROR`. */
+function mapS3Error(error: unknown): AppError {
+  const name = error instanceof Error ? error.name : "";
+  return new AppError(MISSING.has(name) ? "IMAGE_NOT_FOUND" : "STORAGE_ERROR", undefined, error);
+}
+
+export interface ImageHead {
+  contentLength: number;
+  contentType: string | undefined;
+}
+
+export async function headImage(s3: S3Client, bucket: string, key: string): Promise<ImageHead> {
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { contentLength: head.ContentLength ?? 0, contentType: head.ContentType };
+  } catch (error) {
+    throw mapS3Error(error);
+  }
+}
+
+/** Converse needs the bytes; it does not accept S3 URLs (ai-integration.md). */
+export async function getImageBytes(s3: S3Client, bucket: string, key: string): Promise<Uint8Array> {
+  try {
+    const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!object.Body) throw new AppError("STORAGE_ERROR", "Empty object body");
+    return await object.Body.transformToByteArray();
+  } catch (error) {
+    throw error instanceof AppError ? error : mapS3Error(error);
+  }
+}
 
 export const PRESIGN_EXPIRES_SECONDS = 300;
 
