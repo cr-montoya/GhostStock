@@ -11,7 +11,7 @@ function SelectTrigger({ className, children, ...props }: ComponentProps<typeof 
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-bg/60 px-3 text-base text-text shadow-[inset_0_1px_2px_var(--ink)] outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-violet focus-visible:shadow-[0_0_0_3px_var(--violet-glow)] aria-invalid:border-blood data-[placeholder]:text-muted-foreground md:text-sm [&>span]:line-clamp-1",
+        "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-bg/60 px-3 text-base text-text shadow-[inset_0_1px_2px_var(--ink)] outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-violet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet focus-visible:shadow-[0_0_0_3px_var(--violet-glow)] aria-invalid:border-blood data-[placeholder]:text-muted-foreground md:text-sm [&>span]:line-clamp-1",
         className,
       )}
       {...props}

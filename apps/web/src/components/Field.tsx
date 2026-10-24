@@ -20,7 +20,7 @@ export function Field({ label, error, hint, className, children }: FieldProps) {
       <Label htmlFor={id}>{label}</Label>
       {children({ id, "aria-invalid": Boolean(error), "aria-describedby": message ? messageId : undefined })}
       {message && (
-        <p id={messageId} className={cn("text-xs", error ? "text-blood" : "text-muted-foreground")}>
+        <p id={messageId} className={cn("text-sm", error ? "text-blood" : "text-muted-foreground")}>
           {message}
         </p>
       )}

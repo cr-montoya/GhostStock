@@ -50,7 +50,7 @@ export function TokensPage() {
           {SWATCHES.map(([token, className]) => (
             <li key={token} className="glass rounded-lg p-2">
               <div className={`h-16 rounded-md border border-border ${className}`} />
-              <p className="mt-2 px-1 font-mono text-xs text-muted-foreground">{token}</p>
+              <p className="mt-2 px-1 font-mono text-xs text-text/70">{token}</p>
             </li>
           ))}
         </ul>
@@ -62,8 +62,8 @@ export function TokensPage() {
         </h2>
         <div className="glass flex flex-col gap-3 rounded-xl p-6">
           {SCALE.map(([size, px]) => (
-            <p key={size} className={`font-display ${size} truncate`}>
-              <span className="mr-4 inline-block w-10 font-mono text-xs text-muted-foreground">{px}</span>
+            <p key={size} className={`font-display ${size} text-pretty`}>
+              <span className="mr-4 inline-block w-10 font-mono text-xs text-text/70">{px}</span>
               {copy.brand.tagline}
             </p>
           ))}
@@ -87,7 +87,7 @@ export function TokensPage() {
                 <Badge variant="ectoplasm">{copy.confidence.high}</Badge>
                 <Badge variant="violet">{copy.confidence.medium}</Badge>
                 <Badge variant="ember">{copy.confidence.low}</Badge>
-                <Badge variant="blood">{copy.common.lowStock}</Badge>
+                <Badge variant="ember">{copy.common.lowStock}</Badge>
               </div>
               <Field label={copy.showcase.inputLabel}>{(props) => <Input {...props} defaultValue={copy.showcase.sample} />}</Field>
               <div className="flex flex-wrap gap-3">
