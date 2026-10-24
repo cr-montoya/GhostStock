@@ -25,16 +25,19 @@ export async function headImage(s3: S3Client, bucket: string, key: string): Prom
   }
 }
 
+/** The kept photo key for an upload: `media/products/<id>.<ext>`, same extension. */
+export function mediaKeyFor(imageKey: string, id: string): string {
+  return `media/products/${id}.${imageKey.slice(imageKey.lastIndexOf(".") + 1)}`;
+}
+
 /**
- * Copies the raw upload to a kept `media/products/<ulid>.<ext>` key (same extension).
+ * Copies the raw upload to its kept media key. Both keys must already match the
+ * contract key patterns (ULID and extension only), so the CopySource needs no encoding.
  * A source that expired or never existed is `IMAGE_NOT_FOUND`.
  */
-export async function copyToMedia(s3: S3Client, bucket: string, imageKey: string, id: string): Promise<string> {
-  const ext = imageKey.slice(imageKey.lastIndexOf(".") + 1);
-  const mediaKey = `media/products/${id}.${ext}`;
+export async function copyToMedia(s3: S3Client, bucket: string, imageKey: string, mediaKey: string): Promise<void> {
   try {
     await s3.send(new CopyObjectCommand({ Bucket: bucket, Key: mediaKey, CopySource: `${bucket}/${imageKey}` }));
-    return mediaKey;
   } catch (error) {
     throw mapS3Error(error);
   }

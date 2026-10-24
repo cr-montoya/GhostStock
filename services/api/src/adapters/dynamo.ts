@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { ProductSchema, type Product } from "@ghoststock/contracts";
+import { ZodError } from "zod";
 import { AppError } from "../lib/errors.js";
 
 // Single table, one workspace (ADR 0005).
@@ -30,7 +31,12 @@ export function isConditionFailure(error: unknown): boolean {
   return error instanceof Error && error.name === "ConditionalCheckFailedException";
 }
 
-/** Any DynamoDB failure the caller did not expect is `STORAGE_ERROR`. */
+/**
+ * Any DynamoDB failure the caller did not expect is `STORAGE_ERROR` (retryable). A
+ * stored item that fails its schema is `INTERNAL_ERROR`: retrying cannot fix bad data.
+ */
 export function storageError(error: unknown): AppError {
-  return error instanceof AppError ? error : new AppError("STORAGE_ERROR", undefined, error);
+  if (error instanceof AppError) return error;
+  if (error instanceof ZodError) return new AppError("INTERNAL_ERROR", undefined, error);
+  return new AppError("STORAGE_ERROR", undefined, error);
 }
