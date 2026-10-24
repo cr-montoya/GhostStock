@@ -1,7 +1,7 @@
 import { MetricUnit } from "@aws-lambda-powertools/metrics";
 import { S3Client } from "@aws-sdk/client-s3";
-import { CreateAnalysisRequestSchema } from "@ghoststock/contracts";
-import { createBedrockClient } from "../adapters/bedrock.js";
+import { CreateAnalysisRequestSchema, ERROR_HTTP_STATUS } from "@ghoststock/contracts";
+import { CONVERSE_DEADLINE_MS, createBedrockClient } from "../adapters/bedrock.js";
 import { AnalysesEnvSchema, envLoader } from "../lib/env.js";
 import { AppError } from "../lib/errors.js";
 import { json, parseJson, withErrors } from "../lib/http.js";
@@ -9,16 +9,22 @@ import { logger, metrics } from "../lib/observability.js";
 import { analyzeImage } from "../services/analyses.js";
 
 const env = envLoader(AnalysesEnvSchema);
-const s3 = new S3Client({});
+// Bounded S3 calls (2 attempts of at most 5 s each) so their time fits the request budget.
+const s3 = new S3Client({ maxAttempts: 2, requestHandler: { connectionTimeout: 1000, requestTimeout: 5000 } });
 const bedrock = createBedrockClient();
 
+/** Margin kept between the end of the budget and the Lambda timeout. */
+const TIMEOUT_MARGIN_MS = 2000;
+
 /** POST /api/analyses */
-export const handler = withErrors(async (event) => {
+export const handler = withErrors(async (event, context) => {
   const { imageKey } = parseJson(event, CreateAnalysisRequestSchema);
   const { MEDIA_BUCKET, BEDROCK_MODEL_ID } = env();
+  const remainingMs = typeof context.getRemainingTimeInMillis === "function" ? context.getRemainingTimeInMillis() : Infinity;
+  const deadlineMs = Math.min(CONVERSE_DEADLINE_MS, remainingMs - TIMEOUT_MARGIN_MS);
   try {
     const { analysis, attempts } = await analyzeImage(
-      { s3, bucket: MEDIA_BUCKET, bedrock, modelId: BEDROCK_MODEL_ID },
+      { s3, bucket: MEDIA_BUCKET, bedrock, modelId: BEDROCK_MODEL_ID, converse: { deadlineMs } },
       imageKey,
     );
     metrics.addMetric("AnalysisLatencyMs", MetricUnit.Milliseconds, analysis.latencyMs);
@@ -39,7 +45,9 @@ export const handler = withErrors(async (event) => {
     const failed = metrics.singleMetric();
     failed.addDimension("errorCode", code);
     failed.addMetric("AnalysisFailed", MetricUnit.Count, 1);
-    logger.warn("analysis failed", { imageKey, modelId: BEDROCK_MODEL_ID, errorCode: code });
+    const details = { imageKey, modelId: BEDROCK_MODEL_ID, errorCode: code };
+    if (ERROR_HTTP_STATUS[code] >= 500) logger.error("analysis failed", details);
+    else logger.warn("analysis failed", details);
     throw error;
   }
 });

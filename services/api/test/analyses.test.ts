@@ -148,6 +148,22 @@ describe("analyzeImage stored object checks [01-api 2.2, 2.3]", () => {
     expect(bedrockMock.commandCalls(ConverseCommand)).toHaveLength(0);
   });
 
+  it("accepts a png of exactly 3 750 000 bytes", async () => {
+    storedImage("image/png", MAX_UPLOAD_BYTES, new Uint8Array(MAX_UPLOAD_BYTES));
+    bedrockMock.on(ConverseCommand).resolves(converseOutput({ products: [] }));
+    await analyzeImage(deps(), "tmp/01JB5X7Q8M0000000000000900.png");
+    const content = bedrockMock.commandCalls(ConverseCommand)[0]!.args[0].input.messages?.[0]?.content?.[0];
+    expect(content?.image?.format).toBe("png");
+  });
+
+  it("takes S3 time from the request budget and skips Bedrock when none is left", async () => {
+    storedImage();
+    const ticks = [0, 25_000];
+    const clock = () => ticks.shift() ?? 25_000;
+    expect(await codeOf(analyzeImage({ ...deps(), clock }, IMAGE_KEY))).toBe("MODEL_THROTTLED");
+    expect(bedrockMock.commandCalls(ConverseCommand)).toHaveLength(0);
+  });
+
   it("rejects bytes over the limit even when the metadata understated them", async () => {
     storedImage("image/jpeg", 10, new Uint8Array(MAX_UPLOAD_BYTES + 1));
     expect(await codeOf(analyzeImage(deps(), IMAGE_KEY))).toBe("IMAGE_TOO_LARGE");
@@ -283,13 +299,72 @@ describe("POST /api/analyses handler [01-api 2.1, 3.1 to 3.4, 7.1, 8.2, 8.3]", (
   }, 10_000);
 
   it("returns 503 MODEL_UNAVAILABLE not retryable and logs the model id", async () => {
-    const warn = vi.spyOn(logger, "warn");
+    const error = vi.spyOn(logger, "error");
     storedImage();
     bedrockMock.on(ConverseCommand).rejects(new AccessDeniedException({ message: "denied", $metadata: {} }));
     const res = await post({ imageKey: IMAGE_KEY });
     expect(res.statusCode).toBe(503);
     expect(errorOf(res)).toMatchObject({ code: "MODEL_UNAVAILABLE", retryable: false });
-    expect(warn).toHaveBeenCalledWith("analysis failed", { imageKey: IMAGE_KEY, modelId: MODEL_ID, errorCode: "MODEL_UNAVAILABLE" });
+    expect(error).toHaveBeenCalledWith("analysis failed", { imageKey: IMAGE_KEY, modelId: MODEL_ID, errorCode: "MODEL_UNAVAILABLE" });
+  });
+
+  it("publishes the stored metrics on success", async () => {
+    const publish = vi.spyOn(metrics, "publishStoredMetrics");
+    storedImage();
+    bedrockMock.on(ConverseCommand).resolves(converseOutput({ products: [] }));
+    await post({ imageKey: IMAGE_KEY });
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["MODEL_UNAVAILABLE", () => bedrockMock.on(ConverseCommand).rejects(new AccessDeniedException({ message: "denied", $metadata: {} }))],
+    ["IMAGE_NOT_FOUND", () => s3Mock.on(HeadObjectCommand).rejects(new NotFound({ message: "Not Found", $metadata: {} }))],
+  ])("counts AnalysisFailed with errorCode %s", async (code, arrange) => {
+    const addDimension = vi.spyOn(Metrics.prototype, "addDimension");
+    const addMetric = vi.spyOn(Metrics.prototype, "addMetric");
+    storedImage();
+    arrange();
+    await post({ imageKey: IMAGE_KEY });
+    expect(addDimension).toHaveBeenCalledWith("errorCode", code);
+    expect(addMetric).toHaveBeenCalledWith("AnalysisFailed", "Count", 1);
+  });
+
+  it("does not count request validation failures as analysis failures", async () => {
+    const addMetric = vi.spyOn(Metrics.prototype, "addMetric");
+    await post({ imageKey: "nope" });
+    expect(addMetric).not.toHaveBeenCalledWith("AnalysisFailed", "Count", 1);
+  });
+
+  it("returns 413 and 415 for stored objects without calling Bedrock", async () => {
+    storedImage("image/jpeg", MAX_UPLOAD_BYTES + 1);
+    const large = await post({ imageKey: IMAGE_KEY });
+    expect(large.statusCode).toBe(413);
+    expect(errorOf(large).code).toBe("IMAGE_TOO_LARGE");
+    s3Mock.reset();
+    storedImage("image/gif");
+    const type = await post({ imageKey: IMAGE_KEY });
+    expect(type.statusCode).toBe(415);
+    expect(errorOf(type).code).toBe("UNSUPPORTED_MEDIA_TYPE");
+    expect(bedrockMock.commandCalls(ConverseCommand)).toHaveLength(0);
+  });
+
+  it("passes a budget under the remaining Lambda time", async () => {
+    storedImage();
+    bedrockMock.on(ConverseCommand).callsFake(() => new Promise(() => undefined));
+    const context = { ...lambdaContext, getRemainingTimeInMillis: () => 2100 };
+    const started = Date.now();
+    const res = await handler(apiEvent({ routeKey: "POST /api/analyses", body: JSON.stringify({ imageKey: IMAGE_KEY }) }), context);
+    expect(res.statusCode).toBe(503);
+    expect(errorOf(res).code).toBe("MODEL_THROTTLED");
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it("logs no candidate text on success", async () => {
+    const spies = (["info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(logger, level));
+    storedImage();
+    bedrockMock.on(ConverseCommand).resolves(converseOutput({ products: [{ ...product, name: "DISTINCT-CANDIDATE-NAME" }] }));
+    expect((await post({ imageKey: IMAGE_KEY })).statusCode).toBe(200);
+    expect(JSON.stringify(spies.flatMap((spy) => spy.mock.calls))).not.toContain("DISTINCT-CANDIDATE-NAME");
   });
 
   it("never logs image bytes or model text", async () => {

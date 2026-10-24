@@ -8,7 +8,7 @@ import {
   type Analysis,
   type ModelOutput,
 } from "@ghoststock/contracts";
-import { converseWithTool, type ConverseDeps } from "../adapters/bedrock.js";
+import { CONVERSE_DEADLINE_MS, converseWithTool, type ConverseDeps } from "../adapters/bedrock.js";
 import { getImageBytes, headImage } from "../adapters/s3.js";
 import { REPORT_PRODUCTS_TOOL_NAME } from "../bedrock/tool.js";
 import { AppError } from "../lib/errors.js";
@@ -41,6 +41,12 @@ const FORMATS: Record<ImageContentType, ImageFormat> = {
  * `report_products` call is `MODEL_INVALID_OUTPUT`, with no partial salvage.
  */
 export async function analyzeImage(deps: AnalysesDeps, imageKey: string): Promise<AnalysisResult> {
+  const clock = deps.clock ?? Date.now;
+  // One budget for the whole request: S3 time is taken from the Converse deadline, so
+  // the envelope always beats the Lambda timeout (req 3.5).
+  const budgetMs = deps.converse?.deadlineMs ?? CONVERSE_DEADLINE_MS;
+  const requestStart = clock();
+
   const head = await headImage(deps.s3, deps.bucket, imageKey);
   if (head.contentLength > MAX_UPLOAD_BYTES) throw new AppError("IMAGE_TOO_LARGE");
   const contentType = ImageContentType.safeParse(head.contentType);
@@ -49,10 +55,9 @@ export async function analyzeImage(deps: AnalysesDeps, imageKey: string): Promis
   const bytes = await getImageBytes(deps.s3, deps.bucket, imageKey);
   if (bytes.byteLength > MAX_UPLOAD_BYTES) throw new AppError("IMAGE_TOO_LARGE");
 
-  const clock = deps.clock ?? Date.now;
   const startedAt = clock();
   const { output, attempts } = await converseWithTool(
-    { client: deps.bedrock, modelId: deps.modelId, ...deps.converse },
+    { client: deps.bedrock, modelId: deps.modelId, ...deps.converse, deadlineMs: budgetMs - (startedAt - requestStart) },
     { format: FORMATS[contentType.data], bytes },
   );
   const latencyMs = Math.max(0, Math.round(clock() - startedAt));

@@ -81,7 +81,8 @@ export function errorBody(code: ErrorCode, message: string, requestId: string): 
 /**
  * Wraps a route handler: maps `AppError` to the `ApiErrorSchema` envelope with the
  * status from `ERROR_HTTP_STATUS`, turns anything else into `INTERNAL_ERROR` without
- * leaking details, and logs exactly one summary line per request.
+ * leaking details, and logs one summary line per request (handlers may add one
+ * domain line, such as the analysis summary).
  */
 export function withErrors(fn: RouteHandler) {
   return async (event: APIGatewayProxyEventV2, context: Context): Promise<HttpResult> => {
