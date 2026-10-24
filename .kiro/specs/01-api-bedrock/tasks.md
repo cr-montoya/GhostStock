@@ -44,11 +44,13 @@ The commit that creates `services/api/package.json` carries
   - _Requirements: 6.1, 6.2_
 
 - [ ] 7. Playwright API tests
-  - `e2e/api/*.spec.ts` per Requirement 9; fixture photo in `e2e/fixtures/images/`.
+  - `e2e/api/*.spec.ts` per Requirement 9, using the fixture photos committed by
+    02 task 1 in `e2e/fixtures/images/` (read only from this lane).
   - Done when they pass against the first deployed stack (`BASE_URL`).
   - _Requirements: 9.2, 9.3_
 
 - [ ] 8. Verify and sync
   - `npm test -w @ghoststock/api`, typecheck, `npm audit --omit=dev`.
-  - `spec-sync`: tick tasks, reconcile design, update `docs/api.md` if behavior moved.
+  - `spec-sync`: tick tasks, reconcile design. `docs/api.md` belongs to the contracts
+    lane: if behavior moved, open a small 00-contracts PR instead of editing it here.
   - _Requirements: 9.1_
