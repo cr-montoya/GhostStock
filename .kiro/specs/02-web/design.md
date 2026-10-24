@@ -84,12 +84,16 @@ and `imageKey` live in the reducer so retries never re-pick the file.
 `resizeImage(file)`: `createImageBitmap` (with `imageOrientation: "from-image"`),
 scale so the long edge is at most 1568 px, draw on `OffscreenCanvas` (fallback
 `canvas`), `convertToBlob({ type: "image/jpeg", quality: 0.85 })`. Keep the original
-if it is already smaller and under 1.5 MB.
+if it is already within 1568 px and under 1.5 MB. If the result exceeds
+`MAX_UPLOAD_BYTES`, re-encode once at quality 0.7.
 
 ## API client
 
 - `apiFetch` sends JSON, parses success bodies with the passed schema and error bodies
-  with `ApiErrorSchema`; network failures become `ApiClientError("NETWORK")`.
+  with `ApiErrorSchema`; network failures become `ApiClientError("NETWORK")`; error
+  bodies that are not a valid envelope (HTTP API 429, CloudFront 5xx, empty) become
+  `ApiClientError("UNEXPECTED", { retryable: true })`; `204` resolves to `undefined`
+  without parsing.
 - Error copy: `copy.errors[code]`, plus `copy.errors.NETWORK`.
 - Query keys: `["products"]`, `["settings"]`. Mutations invalidate `["products"]`;
   update uses optimistic cache update with rollback.
@@ -136,7 +140,10 @@ spec files:
 | `api` | `api` | `baseURL process.env.BASE_URL` |
 | `smoke` | `smoke` | `baseURL process.env.BASE_URL` |
 
-`webServer` starts `npm run dev -w @ghoststock/web` only for `web-*` and `visual`.
+`webServer` is defined as `process.env.BASE_URL ? undefined : { command: "npm run dev
+-w @ghoststock/web", url: "http://localhost:5173", reuseExistingServer: true }`, so
+`--project=api` and `--project=smoke` (which require `BASE_URL`) never boot Vite. The
+e2e workspace has scripts per project and no `test` script.
 Specs: `ritual.spec.ts`, `resurrection.spec.ts`, `review.spec.ts`,
 `dashboard.spec.ts`, `inventory.spec.ts`, `settings.spec.ts`, `a11y.spec.ts`,
 `motion.spec.ts`. Test titles carry the criterion id, e.g. `[02 4.4]`.

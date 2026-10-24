@@ -6,8 +6,13 @@ Every UI slice ships with desktop and phone screenshots in its PR.
 
 - [ ] 1. Scaffold web and Playwright workspaces
   - Vite React TS app, Tailwind 4, shadcn init, router, providers, MSW bootstrap.
-  - `e2e/` workspace with `playwright.config.ts` (all five projects) and one passing
-    smoke spec on the empty shell; add `e2e` to the root `workspaces` list.
+  - `e2e/` workspace with `playwright.config.ts` (all five projects, `webServer` only
+    when `BASE_URL` is unset), scripts `test:web`, `test:visual`, `test:api`,
+    `test:smoke` and **no** `test` script (so root `npm test` never runs deployed
+    projects), and one passing spec on the empty shell; add `e2e` to the root
+    `workspaces` list.
+  - Commit the fixture photos `e2e/fixtures/images/` (3 small license-free product
+    photos and 1 photo with no products), used by web, api and smoke tests.
   - Commit carries `ADR-EXEMPT: workspaces recorded in ADR 0002 and ADR 0009`.
   - _Requirements: 11.1, 11.2_
 
@@ -15,6 +20,7 @@ Every UI slice ships with desktop and phone screenshots in its PR.
   - `tokens.css`, `globals.css`, fonts, grain, glows, fog, shadcn theme mapping,
     `Logo`, `GhostEmptyState`, `ProductPhoto`, `copy/es.ts` skeleton.
   - Visual baseline of a token showcase route (dev only).
+  - Vitest guard: no hex color literal under `apps/web/src` outside `tokens.css`.
   - _Requirements: 1.1, 1.2, 1.3, 10.2_
 
 - [ ] 3. Shell and command palette
