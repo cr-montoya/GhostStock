@@ -139,7 +139,7 @@ Validated with zod on the first invocation and cached (`lib/env.ts`), inside
 | `TABLE_NAME` | inventory |
 | `BEDROCK_MODEL_ID` | analyses |
 | `LOW_STOCK_DEFAULT` | inventory |
-| `POWERTOOLS_SERVICE_NAME`, `POWERTOOLS_METRICS_NAMESPACE` (`GhostStock`), `LOG_LEVEL` | all |
+| `POWERTOOLS_SERVICE_NAME`, `POWERTOOLS_METRICS_NAMESPACE` (`GhostStock`), `POWERTOOLS_LOG_LEVEL` | all |
 
 ## Dependencies (ADR 0010)
 
@@ -150,7 +150,8 @@ Runtime: `@ghoststock/contracts`, `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-p
 `aws-sdk-client-mock`, `vitest`, `typescript`, `@types/node`. Bundled by CDK `NodejsFunction`
 (esbuild); this package has `build` = `tsc --noEmit` only. Vitest and `tsc` resolve
 `@ghoststock/contracts` to its source (alias and `paths`), so tests need no prior build;
-the bundle resolves the built package, so the pipeline builds contracts first.
+esbuild honours the same tsconfig `paths`, so the Lambda bundle also compiles the
+contracts source and no contracts build step is needed before `cdk synth`.
 
 ## Testing
 
