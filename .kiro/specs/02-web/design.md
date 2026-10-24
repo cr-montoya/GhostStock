@@ -125,7 +125,12 @@ if it is already within 1568 px and under 1.5 MB. If the result exceeds
 
 ## MSW
 
-Handlers for every endpoint return contract fixtures. `scenarios.ts` reads
+Handlers for every endpoint return contract fixtures. Besides the six spec scenarios, three test-only
+scenarios force failures that MSW would otherwise hide from Playwright routing:
+`save-error` (POST products 500 `STORAGE_ERROR`), `products-error` (GET products 500
+`INTERNAL_ERROR`) and `mutation-error` (PUT/DELETE products and PUT settings 500
+`STORAGE_ERROR`). `throttled` answers the analysis with a bare HTTP API 429 body (not
+an envelope). In dev, `/media/products/*` serves a fixture photo (Vite middleware). `scenarios.ts` reads
 `?scenario=` once and stores it in `sessionStorage` so navigation keeps it.
 Scenario `happy` simulates 2.5 s analysis latency so the resurrection is visible.
 `postToS3` is intercepted (any `*.amazonaws.com` POST returns 204).
