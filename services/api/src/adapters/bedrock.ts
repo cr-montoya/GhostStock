@@ -18,7 +18,8 @@ const UNAVAILABLE = new Set(["AccessDeniedException", "ResourceNotFoundException
 
 /** Retries are ours only: the SDK must not add its own on top (req 3.5). */
 export function createBedrockClient(): BedrockRuntimeClient {
-  return new BedrockRuntimeClient({ maxAttempts: 1 });
+  // The US cross-region inference profiles are invoked from us-east-1 (ai-integration.md).
+  return new BedrockRuntimeClient({ region: "us-east-1", maxAttempts: 1 });
 }
 
 export interface ConverseDeps {
@@ -49,6 +50,7 @@ export async function converseWithTool(deps: ConverseDeps, image: ConverseImage)
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const deadlineMs = deps.deadlineMs ?? CONVERSE_DEADLINE_MS;
+  if (deadlineMs <= 0) throw new AppError("MODEL_THROTTLED", "No time left for the model call");
   const startedAt = now();
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;

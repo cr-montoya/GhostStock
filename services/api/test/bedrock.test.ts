@@ -122,6 +122,40 @@ describe("converseWithTool [01-api 3.3, 3.4, 3.5]", () => {
     expect(time.sleeps).toEqual([400]);
   });
 
+  it("returns MODEL_THROTTLED after 2 retries of ServiceUnavailableException", async () => {
+    const time = fakeTime();
+    bedrock.on(ConverseCommand).rejects(new ServiceUnavailableException({ message: "busy", ...meta }));
+    expect(await codeOf(converseWithTool({ client, modelId: MODEL_ID, ...time }, image))).toBe("MODEL_THROTTLED");
+    expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(3);
+    expect(time.sleeps).toEqual([400, 1200]);
+  });
+
+  it("answers MODEL_THROTTLED when the deadline fires during a backoff, without another call", async () => {
+    bedrock.on(ConverseCommand).rejects(new ThrottlingException({ message: "slow down", ...meta }));
+    const started = Date.now();
+    const sleep = () => new Promise<void>(() => undefined);
+    const code = await codeOf(converseWithTool({ client, modelId: MODEL_ID, deadlineMs: 500, sleep }, image));
+    expect(code).toBe("MODEL_THROTTLED");
+    expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it("aborts the in-flight SDK call at the deadline", async () => {
+    bedrock.on(ConverseCommand).callsFake(() => new Promise(() => undefined));
+    await codeOf(converseWithTool({ client, modelId: MODEL_ID, deadlineMs: 30 }, image));
+    const options = (bedrock.commandCalls(ConverseCommand)[0]!.args as unknown[])[1] as { abortSignal?: AbortSignal } | undefined;
+    expect(options?.abortSignal?.aborted).toBe(true);
+  });
+
+  it("does not call Bedrock when no time is left", async () => {
+    expect(await codeOf(converseWithTool({ client, modelId: MODEL_ID, deadlineMs: 0 }, image))).toBe("MODEL_THROTTLED");
+    expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(0);
+  });
+
+  it("calls Bedrock in us-east-1", async () => {
+    expect(await createBedrockClient().config.region()).toBe("us-east-1");
+  });
+
   it("does not retry ModelTimeoutException", async () => {
     bedrock.on(ConverseCommand).rejects(new ModelTimeoutException({ message: "timeout", ...meta }));
     expect(await codeOf(converseWithTool({ client, modelId: MODEL_ID, ...fakeTime() }, image))).toBe("MODEL_THROTTLED");
@@ -163,6 +197,8 @@ describe("mapBedrockError", () => {
     expect(mapped.cause).toBe(cause);
     expect(mapBedrockError(new ValidationException({ message: "bad request shape", ...meta })).code).toBe("INTERNAL_ERROR");
     expect(mapBedrockError("x").code).toBe("INTERNAL_ERROR");
+    const imageError = new ValidationException({ message: "The provided image could not be processed.", ...meta });
+    expect(mapBedrockError(imageError).code).toBe("INTERNAL_ERROR");
   });
 
   it("maps an abort to MODEL_THROTTLED", () => {
