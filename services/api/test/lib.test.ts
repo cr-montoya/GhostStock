@@ -3,7 +3,6 @@ import { ApiErrorSchema, Ulid } from "@ghoststock/contracts";
 import { AnalysesEnvSchema, InventoryEnvSchema, UploadsEnvSchema, envLoader } from "../src/lib/env.js";
 import { AppError } from "../src/lib/errors.js";
 import { ulid } from "../src/lib/ids.js";
-import { handler as analyses } from "../src/handlers/analyses.js";
 import { handler as inventory } from "../src/handlers/inventory.js";
 import { apiEvent, lambdaContext } from "./helpers.js";
 
@@ -49,7 +48,6 @@ describe("envLoader", () => {
 
 describe("handler entry points (task 1 stubs)", () => {
   it.each([
-    ["analyses", analyses],
     ["inventory", inventory],
   ])("%s answers 500 INTERNAL_ERROR in the envelope", async (_name, handler) => {
     const res = await handler(apiEvent(), lambdaContext);
