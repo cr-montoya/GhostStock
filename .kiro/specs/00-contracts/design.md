@@ -44,7 +44,7 @@ export const CATEGORIES = [
   "electronica", "papeleria", "ropa", "juguetes", "mascotas", "otros",
 ] as const;
 export const Category = z.enum(CATEGORIES);
-export const CATEGORY_LABELS: Record<Category, string> = {
+export const CATEGORY_LABELS: Record<z.infer<typeof Category>, string> = {
   alimentos: "Alimentos", bebidas: "Bebidas", aseo: "Aseo", belleza: "Belleza",
   hogar: "Hogar", ferreteria: "Ferretería", electronica: "Electrónica",
   papeleria: "Papelería", ropa: "Ropa", juguetes: "Juguetes", mascotas: "Mascotas",
@@ -56,7 +56,7 @@ export const ImageContentType = z.enum(["image/jpeg", "image/png", "image/webp"]
 export const Confidence = z.enum(["high", "medium", "low"]);
 export const ImageKeySchema = z.string().regex(/^tmp\/[0-9A-HJKMNP-TV-Z]{26}\.(jpg|png|webp)$/);
 export const MediaKeySchema = z.string().regex(/^media\/products\/[0-9A-HJKMNP-TV-Z]{26}\.(jpg|png|webp)$/);
-export const MAX_UPLOAD_BYTES = 5_242_880;
+export const MAX_UPLOAD_BYTES = 3_750_000;
 
 // analysis.ts
 export const ModelProductSchema = z.strictObject({
@@ -83,14 +83,19 @@ export const AnalysisSchema = z.object({
 });
 
 // product.ts
-export const ProductFieldsSchema = z.strictObject({
+// Base without defaults: zod 4 applies .default() even inside .partial(), which
+// would silently reset description on every PUT. Defaults live on the create path.
+const ProductFieldsBase = z.strictObject({
   name: z.string().trim().min(1).max(120),
   category: Category,
-  description: z.string().trim().max(500).default(""),
+  description: z.string().trim().max(500),
   brand: z.string().trim().min(1).max(80).optional(),
   sku: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).optional(),
   quantity: z.number().int().min(0).max(1_000_000),
   unitPriceCop: z.number().int().min(0).max(1_000_000_000),
+});
+export const ProductFieldsSchema = ProductFieldsBase.extend({
+  description: ProductFieldsBase.shape.description.default(""),
 });
 export const ReviewedProductSchema = ProductFieldsSchema.extend({
   aiConfidence: Confidence.optional(),
@@ -106,11 +111,28 @@ export const CreateProductsRequestSchema = z.strictObject({
   imageKey: ImageKeySchema,
   products: z.array(ReviewedProductSchema).min(1).max(10),
 });
-export const UpdateProductRequestSchema = ProductFieldsSchema.partial()
+export const UpdateProductRequestSchema = ProductFieldsBase.partial()
   .refine((v) => Object.keys(v).length > 0, { message: "empty update" });
+
+// config.ts: empty strings from CodeBuild env become undefined before validation
+const optionalText = <T extends z.ZodType>(s: T) =>
+  z.preprocess((v) => (v === "" ? undefined : v), s.optional());
+export const InfraConfigSchema = z.object({
+  region: z.string().min(1),
+  repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  branch: z.string().min(1),
+  bedrockModelId: z.string().regex(/^us\.[a-z0-9.-]+:\d+$/),
+  lowStockDefault: z.coerce.number().int().min(0),
+  enableTests: z.coerce.boolean(),
+  budgetUsd: z.coerce.number().positive(),
+  connectionArn: optionalText(z.string().startsWith("arn:aws:codeconnections:")),
+  budgetEmail: optionalText(z.email()),
+});
 ```
 
-Upload, settings and config schemas follow the requirements literally.
+Upload and settings schemas follow the requirements literally. `enableTests` must
+treat the string `"false"` as false (custom preprocess, not plain `z.coerce.boolean`,
+which turns any non-empty string into true).
 
 ## Error catalog
 
@@ -118,7 +140,7 @@ Upload, settings and config schemas follow the requirements literally.
 | --- | --- | --- | --- |
 | `VALIDATION_ERROR` | 400 | no | body, path or query fails zod |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | no | content type not allowed |
-| `IMAGE_TOO_LARGE` | 413 | no | declared or stored size over 5 MB |
+| `IMAGE_TOO_LARGE` | 413 | no | declared or stored size over 3.75 MB |
 | `IMAGE_NOT_FOUND` | 404 | no | `imageKey` missing or expired in S3 |
 | `NOT_FOUND` | 404 | no | product id does not exist |
 | `MODEL_UNAVAILABLE` | 503 | no | model access denied or not found |

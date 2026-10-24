@@ -45,11 +45,12 @@ the browser sends the photo straight to S3.
 #### Acceptance Criteria
 
 1. THE contracts package SHALL export `CreateUploadRequestSchema` with `contentType`
-   (`image/jpeg | image/png | image/webp`) and `sizeBytes` (integer 1 to 5 242 880).
+   (`image/jpeg | image/png | image/webp`) and `sizeBytes` (integer 1 to 3 750 000).
 2. THE contracts package SHALL export `CreateUploadResponseSchema` with `url`,
    `fields` (string record), `imageKey` and `expiresAt` (ISO 8601).
-3. WHEN `sizeBytes` exceeds 5 242 880, THE request schema SHALL fail with a message
-   that maps to `IMAGE_TOO_LARGE`.
+3. WHEN `sizeBytes` exceeds 3 750 000 (the Bedrock Converse per-image limit), THE
+   request schema SHALL fail with a `too_big` issue on `sizeBytes`, which the API maps
+   to `IMAGE_TOO_LARGE`; an issue on `contentType` maps to `UNSUPPORTED_MEDIA_TYPE`.
 
 ### Requirement 3: Analysis contracts
 
