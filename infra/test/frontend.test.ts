@@ -75,6 +75,12 @@ describe("distribution", () => {
     expect(cloudfrontReads).toHaveLength(1);
     expect(cloudfrontReads[0]!.Action).toBe("s3:GetObject");
     expect(resolved(cloudfrontReads[0]!.Resource)).toMatch(/"\/media\/products\/\*"\]\]\}$/);
+    // Without this condition any distribution could read saved photos.
+    const condition = (cloudfrontReads[0] as { Condition?: { StringEquals?: Record<string, unknown> } })
+      .Condition?.StringEquals?.["AWS:SourceArn"];
+    expect(resolved(condition)).toMatch(
+      /^\{"Fn::Join":\["",\["arn:aws:cloudfront::\d{12}:distribution\/",\{"Ref":"FrontendDistribution[^"]+"\}\]\]\}$/,
+    );
   });
 
   it("[03-infra-pipeline 6.2] HTTPS (redirect for SPA and media, reject on /api/*), HTTP/2 and 3, headers", () => {

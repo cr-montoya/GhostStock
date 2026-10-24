@@ -27,7 +27,7 @@ export const CDK_CLI_VERSION: string = JSON.parse(
 ).devDependencies["aws-cdk"];
 export const CDK_ASSETS_CLI_VERSION = "4.7.4";
 
-const INSTALL =["corepack enable", "pnpm install --frozen-lockfile"];
+const INSTALL = ["corepack enable", "pnpm install --frozen-lockfile"];
 const PLAYWRIGHT = "pnpm --filter @ghoststock/e2e exec playwright install --with-deps chromium";
 
 export interface GhostStockPipelineStackProps extends StackProps {
