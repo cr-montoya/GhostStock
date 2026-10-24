@@ -1,7 +1,7 @@
 # Fixture images
 
 Synthetic product photos rendered by `../render-images.ts` (no people, no third-party
-licenses). Used by the web, api and smoke Playwright projects.
+licenses; regenerating needs Node 22.18+ for type stripping). Used by the web, api and smoke Playwright projects.
 
 | File | Content |
 | --- | --- |

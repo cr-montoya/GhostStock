@@ -51,6 +51,7 @@ apps/web/
       browser.ts
   vite.config.ts          dev server on 5173; serves the MSW worker in dev only;
                           aliases @ghoststock/contracts to its src for dev and build
+                          (tsconfig paths do the same, so tsc and Vite agree)
   scripts/assert-no-msw.mjs  build step that fails if MSW reaches dist (11.2)
   components.json         shadcn config
 e2e/                      Playwright workspace (scaffold owned by this spec)
@@ -148,7 +149,7 @@ The `visual` project captures both viewports: each visual spec loops over
 browser instead of the downloaded Chromium.
 
 `webServer` is defined as `process.env.BASE_URL ? undefined : { command: "pnpm --filter @ghoststock/web
-dev", url: "http://localhost:5173", reuseExistingServer: true }`, so
+dev", url: "http://localhost:5173", reuseExistingServer: !process.env.CI }`, so
 `--project=api` and `--project=smoke` (which require `BASE_URL`) never boot Vite. The
 e2e workspace has scripts per project and no `test` script.
 Specs: `ritual.spec.ts`, `resurrection.spec.ts`, `review.spec.ts`,

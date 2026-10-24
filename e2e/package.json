@@ -6,8 +6,8 @@
   "scripts": {
     "test:web": "playwright test --project=web-desktop --project=web-mobile",
     "test:visual": "playwright test --project=visual",
-    "test:api": "playwright test --project=api",
-    "test:smoke": "playwright test --project=smoke",
+    "test:api": "playwright test --project=api --pass-with-no-tests",
+    "test:smoke": "playwright test --project=smoke --pass-with-no-tests",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

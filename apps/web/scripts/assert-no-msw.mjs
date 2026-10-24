@@ -1,9 +1,11 @@
 // Fails the build when anything from MSW reaches the production bundle (spec 02, 11.2).
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const dist = new URL("../dist/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-const markers = ["mockServiceWorker", "msw/browser", "setupWorker"];
+const dist = fileURLToPath(new URL("../dist/", import.meta.url));
+// Text markers only: keep build.sourcemap off or extend this check to .map files.
+const markers = ["mockServiceWorker", "msw/browser", "setupWorker", "HttpResponse", "ghoststock:scenario"];
 const leaks = [];
 
 for (const entry of readdirSync(dist, { recursive: true, withFileTypes: true })) {
