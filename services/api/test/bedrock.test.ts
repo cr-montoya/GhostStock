@@ -199,7 +199,11 @@ describe("mapBedrockError", () => {
     ["Unable to decode the provided bytes", "UNSUPPORTED_MEDIA_TYPE"],
     ["The model returned the following errors: Unable to process the provided image", "UNSUPPORTED_MEDIA_TYPE"],
     ["The model returned the following errors: invalid image format", "UNSUPPORTED_MEDIA_TYPE"],
+    ["The model returned the following errors: Unable to process the provided bytes", "UNSUPPORTED_MEDIA_TYPE"],
     ["Malformed input request: toolConfig is invalid", "INTERNAL_ERROR"],
+    ["The model returned the following errors: Malformed input request, please reformat your input and try again.", "INTERNAL_ERROR"],
+    ["Invocation of model ID amazon.nova-pro-v1:0 with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.", "MODEL_UNAVAILABLE"],
+    ["This model doesn't support the image content block that you provided.", "MODEL_UNAVAILABLE"],
   ])("maps ValidationException %j to %s", (message, code) => {
     const error = new ValidationException({ message, ...meta });
     const mapped = mapBedrockError(error);

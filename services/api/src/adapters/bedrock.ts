@@ -15,8 +15,14 @@ export const RETRY_DELAYS_MS = [400, 1200] as const;
 
 const RETRYABLE = new Set(["ThrottlingException", "ServiceUnavailableException"]);
 const UNAVAILABLE = new Set(["AccessDeniedException", "ResourceNotFoundException"]);
-// A ValidationException about the photo itself: the user should try another one.
-const IMAGE_PROBLEM = /image|format|dimension|decode|could not process/i;
+// ValidationException messages, checked in this order (design "Analyses" step 4):
+// a model that cannot take images is configuration, not the photo;
+const MODEL_REJECTS_IMAGES = /(doesn't|does not|isn't|not) support(ed)? (the )?image/i;
+// a problem with the photo itself: the user should try another one;
+const IMAGE_PROBLEM = /image|\bformat\b|dimension|decode|(could not|unable to) process/i;
+// a model id, access or invocation problem. Not bare "model": Amazon Nova prefixes every
+// error with "The model returned the following errors".
+const MODEL_PROBLEM = /access|model identifier|model id|on-demand throughput|not supported|(doesn't|does not|isn't) support/i;
 
 /** Retries are ours only: the SDK must not add its own on top (req 3.5). */
 export function createBedrockClient(): BedrockRuntimeClient {
@@ -100,8 +106,8 @@ export async function converseWithTool(deps: ConverseDeps, image: ConverseImage)
 
 /**
  * Maps a Bedrock SDK exception to the contract error code (ai-integration.md, req 3.4).
- * A ValidationException about the image is checked before the model rule: some models
- * (Amazon Nova) word image errors as "The model returned the following errors: ...".
+ * ValidationException: a model that rejects images, then the photo, then the model id
+ * or access; anything else is INTERNAL_ERROR.
  * Any other one is INTERNAL_ERROR; its Bedrock message is logged, never image bytes.
  */
 export function mapBedrockError(error: unknown): AppError {
@@ -110,11 +116,13 @@ export function mapBedrockError(error: unknown): AppError {
   if (RETRYABLE.has(name) || name === "ModelTimeoutException" || name === "AbortError") {
     return new AppError("MODEL_THROTTLED", undefined, error);
   }
-  if (name === "ValidationException" && IMAGE_PROBLEM.test(message)) {
-    return new AppError("UNSUPPORTED_MEDIA_TYPE", "Image could not be processed", error);
-  }
-  if (UNAVAILABLE.has(name) || (name === "ValidationException" && /model|access/i.test(message))) {
-    return new AppError("MODEL_UNAVAILABLE", undefined, error);
+  if (UNAVAILABLE.has(name)) return new AppError("MODEL_UNAVAILABLE", undefined, error);
+  if (name === "ValidationException") {
+    if (MODEL_REJECTS_IMAGES.test(message)) return new AppError("MODEL_UNAVAILABLE", undefined, error);
+    if (IMAGE_PROBLEM.test(message)) {
+      return new AppError("UNSUPPORTED_MEDIA_TYPE", "Image could not be processed", error);
+    }
+    if (MODEL_PROBLEM.test(message)) return new AppError("MODEL_UNAVAILABLE", undefined, error);
   }
   return new AppError("INTERNAL_ERROR", undefined, error);
 }
