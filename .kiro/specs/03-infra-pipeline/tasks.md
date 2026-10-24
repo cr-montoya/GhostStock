@@ -47,18 +47,26 @@ go-ahead.
   - `docs/deployment.md` and `docs/architecture.md` per Requirement 11.
   - _Requirements: 11.1, 11.2_
 
-- [ ] 8. First deployment (owner go-ahead required)
+- [x] 8. First deployment (owner go-ahead required)
   - Owner runs bootstrap, connection authorization and
     `pnpm exec cdk deploy GhostStockPipeline -c connectionArn=... -c budgetEmail=...`.
   - Done when the pipeline is green and `BaseUrl` serves the app.
   - _Requirements: 2.1, 2.4, 7.2_
 
-- [ ] 9. Smoke tests and enable gates
+- [x] 9. Smoke tests and enable gates
   - `e2e/smoke/*.spec.ts` per Requirement 10.2; green against `BaseUrl`.
   - When the MVP works end to end: PR setting `enableTests: true`; verify the
-    pipeline mutates and adds both steps.
+    pipeline mutates and adds both steps. Left at `false` by the owner's decision for
+    the demo; turning it on is a one-line `cdk.json` change (docs/deployment.md).
   - _Requirements: 3.2, 10.2_
 
-- [ ] 10. Verify and sync
+- [x] 10. Verify and sync
   - `pnpm --filter @ghoststock/infra test`, `pnpm exec cdk synth`, `spec-sync`.
   - _Requirements: 10.1, 10.3_
+
+- [x] 11. Manual teardown (ADR 0013)
+  - `GhostStock-Teardown` CodeBuild project in the pipeline stack, outside the
+    pipeline, role limited to deleting the app stack; `TeardownProject` output;
+    `docs/deployment.md` step 8.
+  - Tests: project exists, is not a pipeline action, least-privilege role.
+  - _Requirements: 10.3, 11.1_

@@ -146,6 +146,10 @@ the deploy.
   pipeline itself first (self-mutation).
 - `cd infra && pnpm exec cdk synth` and `pnpm exec cdk diff` are always safe locally.
 - Infra tests: `pnpm --filter @ghoststock/infra test` (bundling skipped).
+- Smoke against the deployed stack, any time (read-only: no Bedrock call, no product
+  created): `BASE_URL=https://<BaseUrl> pnpm --filter @ghoststock/e2e test:smoke`
+  (build `@ghoststock/contracts` first; add `PW_CHANNEL=chrome` to use an installed
+  Chrome instead of `playwright install chromium`).
 
 ## 8. Teardown (owner only)
 
