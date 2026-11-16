@@ -5,12 +5,14 @@ doc lie is not done (`spec-sync` skill, PR template "Living docs" section).
 
 | Doc | What it answers | Owner lane | Status |
 | --- | --- | --- | --- |
+| [../README.md](../README.md) | Demo media, license, costs and fork quick start | docs | live |
+| [media/](media/README.md) | Phone demo loop and screenshots | docs | live |
 | [adr/](adr/README.md) | Why we chose each path | any | live |
 | [git-workflow.md](git-workflow.md) | Branches, commits, PRs, gates | harness | live |
 | [sdd-workflow.md](sdd-workflow.md) | Kiro spec to merged code | harness | live |
 | [architecture.md](architecture.md) | Components, data flow, AWS services, diagrams | infra | live |
 | [api.md](api.md) | Endpoints with example requests and responses (generated from fixtures) | contracts | live |
-| [deployment.md](deployment.md) | Bootstrap, CodeConnections, first deploy, pipeline | infra | live |
+| [deployment.md](deployment.md) | Fork setup, bootstrap, CodeConnections, first deploy, pipeline and teardown | infra | live |
 | kiro-usage.md | Which Kiro features we use, why, how to demo them | harness | from Kiro step 3 |
 | demo.md | The 3-minute demo script and checklist | web | before the demo |
 

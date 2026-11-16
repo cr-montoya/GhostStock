@@ -42,17 +42,20 @@ Region `us-east-1`. The account comes from your CLI credentials.
 ## 1. Bedrock model access
 
 The analyses function calls the US cross-region inference profile set in
-`infra/cdk.json` (`bedrockModelId`, default Claude Sonnet 4.5).
+`infra/cdk.json`: `bedrockModelId` defaults to `us.amazon.nova-pro-v1:0`
+(Amazon Nova Pro, [ADR 0012](adr/0012-default-model-amazon-nova-pro.md)).
 
-1. Open the Amazon Bedrock console in `us-east-1`, go to **Model access**.
-2. Enable **Anthropic Claude Sonnet 4.5** (and **Claude Haiku 4.5**, the fallback in
-   `.kiro/steering/ai-integration.md`). Anthropic models ask for a one-time use case
-   form; access is usually granted within minutes.
-3. Verify:
+1. Open Amazon Bedrock in `us-east-1` and confirm your account can invoke Nova Pro.
+   Amazon Nova does not require the Anthropic use case form. The deployment roles
+   must still allow the configured cross-region inference profile and its models.
+2. If you choose Anthropic instead, complete its one-time use case form and obtain
+   access before changing `bedrockModelId`; access may take time to propagate.
+3. Verify the default profile exists:
    ```sh
    aws bedrock list-inference-profiles --region us-east-1 \
-     --query "inferenceProfileSummaries[?inferenceProfileId=='us.anthropic.claude-sonnet-4-5-20250929-v1:0'].status"
+     --query "inferenceProfileSummaries[?inferenceProfileId=='us.amazon.nova-pro-v1:0'].status"
    ```
+   A listed profile does not by itself prove that invocation is authorized.
 
 Without access the app still deploys; analyses return the model error state.
 
@@ -75,7 +78,7 @@ Skip it if the `CDKToolkit` stack already exists in `us-east-1`.
    Keep the returned `ConnectionArn`. Do not commit it.
 2. Authorize it: console **Developer Tools > Settings > Connections**, select
    `ghoststock-github`, **Update pending connection**, install or pick the AWS
-   Connector for GitHub app with access to `cr-montoya/GhostStock`.
+   Connector for GitHub app with access to your fork (`YOUR_GITHUB_USER/GhostStock`).
 3. Verify the status is `AVAILABLE`:
    ```sh
    aws codeconnections get-connection --connection-arn <CONNECTION_ARN> \
@@ -83,6 +86,12 @@ Skip it if the `CDKToolkit` stack already exists in `us-east-1`.
    ```
 
 ## 4. First deploy (owner only)
+
+Before deploying a fork, change context `repo` in `infra/cdk.json` to
+`YOUR_GITHUB_USER/GhostStock` and `branch` to the branch you want to deploy
+(normally `main`). Keep `region` as `us-east-1`. Commit those settings to that
+branch in your fork. The authorized connection must be able to read that repo.
+The commands below assume the deployment branch is `main`.
 
 From the repository root, on an up to date `main`:
 
@@ -164,8 +173,9 @@ aws codepipeline put-approval-result --pipeline-name GhostStock --stage-name Tea
 ```
 
 `DestroyApp` then deletes `Prod-GhostStockAppStack` (both buckets are emptied
-automatically through `autoDeleteObjects`) and keeps the pipeline, which costs nothing
-while idle. Leaving the approval unanswered changes nothing; it expires after 7 days.
+automatically through `autoDeleteObjects`) and keeps the pipeline. An idle V2
+pipeline has no action-execution charge, but retained artifacts and logs can still
+incur storage charges. Leaving the approval unanswered changes nothing; it expires after 7 days.
 To bring the app back, start the pipeline:
 
 ```sh
