@@ -6,6 +6,7 @@
 
 Take a photo of your shelf. Amazon Bedrock recognizes the products. You confirm quantities and prices. Your warehouse wakes up.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 ![AWS](https://img.shields.io/badge/AWS-CDK%20v2-232F3E?style=flat-square&logo=amazonwebservices&logoColor=white)
 ![Bedrock](https://img.shields.io/badge/Amazon-Bedrock-01A88D?style=flat-square&logo=amazonwebservices&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -14,11 +15,24 @@ Take a photo of your shelf. Amazon Bedrock recognizes the products. You confirm 
 ![Playwright](https://img.shields.io/badge/tested%20with-Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)
 ![Kiro](https://img.shields.io/badge/specs%20by-Kiro-7C3AED?style=flat-square)
 
-Built in one day at **Kiro Day Medellín 2026**.
+Built in one day and winner at **Kiro Day Medellín 2026**.
 
 </div>
 
 ---
+
+## Demo
+
+Photo upload, detected products, review and inventory on a phone, recorded from the deployed app.
+
+<img src="docs/media/demo.webp" width="360" alt="Loop showing photo upload, detected product cards, review and inventory" />
+
+<p>
+  <a href="docs/media/upload.png"><img src="docs/media/upload.png" width="180" alt="Photo upload" /></a>
+  <a href="docs/media/detected.png"><img src="docs/media/detected.png" width="180" alt="Detected product cards" /></a>
+  <a href="docs/media/review.png"><img src="docs/media/review.png" width="180" alt="Reviewing product details" /></a>
+  <a href="docs/media/inventory.png"><img src="docs/media/inventory.png" width="180" alt="Saved inventory list" /></a>
+</p>
 
 ## What it does
 
@@ -56,7 +70,7 @@ GhostStock is as much about **how** it was built as about what it does.
 **A harness every tool obeys.**
 - [`AGENTS.md`](AGENTS.md) is the single router for Kiro, Claude Code or any other agent; skills and agent briefs live once in [`.agents/`](.agents).
 - Git-native gates in [`.agents/hooks/git`](.agents/hooks/git): no commits or pushes to `main`, Conventional Commits, no AI attribution, secret scan, and an ADR gate for architecture changes.
-- Twelve [ADRs](docs/adr/README.md) and living docs; [`docs/api.md`](docs/api.md) is generated from the contract fixtures.
+- [ADRs](docs/adr/README.md) and living docs; [`docs/api.md`](docs/api.md) is generated from the contract fixtures.
 
 **Parallel agents, independent evaluators.** Three agents worked in parallel lanes (API, web, infra), each in its own git worktree with path ownership and no overlaps. No builder certified its own work: code, security, QA and visual reviewers ran on every pull request. More than 25 small PRs landed on a trunk-based `main`.
 
@@ -103,9 +117,34 @@ pnpm test                                   # unit tests in every workspace
 pnpm --filter @ghoststock/e2e test:web      # Playwright on desktop and phone
 ```
 
-## Deploy
+## Deploy from your fork
 
-One manual deploy creates the pipeline; after that every merge to `main` ships itself. Bootstrap, the CodeConnections authorization, Bedrock model access and the first `cdk deploy` are documented step by step in [docs/deployment.md](docs/deployment.md).
+1. Fork the repository. In [`infra/cdk.json`](infra/cdk.json), set context `repo` to `YOUR_GITHUB_USER/GhostStock` and `branch` to your deployment branch (normally `main`); keep `region` as `us-east-1`.
+2. Create an AWS CodeConnections GitHub connection in your account and authorize the GitHub app for **your fork** until the connection is `AVAILABLE`. Supply its ARN as `-c connectionArn=<CONNECTION_ARN>` during the first pipeline deploy; keep account-specific values out of git.
+3. Use the default Bedrock profile `us.amazon.nova-pro-v1:0` (Amazon Nova Pro). Ensure your account can invoke it; Anthropic alternatives require the one-time use case form before switching `bedrockModelId` ([ADR 0012](docs/adr/0012-default-model-amazon-nova-pro.md)).
+4. Follow [the deployment guide](docs/deployment.md) for bootstrap, permissions, `budgetEmail` and the owner-run first deploy. Afterward, pushes to the configured branch deploy automatically. Merging to this repository's `main` deploys to the maintainer's AWS account.
+
+## Costs and cleanup
+
+Public AWS list prices checked **2026-11-16**, in USD for **us-east-1**, before taxes, credits and free tiers. This is a usage estimate, not a measured bill or a fixed monthly price.
+
+| Component | What you pay for |
+| --- | --- |
+| [Bedrock Nova Pro](https://aws.amazon.com/bedrock/pricing/) | Standard on-demand input: **$0.80 per million tokens**; output: **$3.20 per million tokens**. Images count toward input usage. |
+| [Lambda](https://aws.amazon.com/lambda/pricing/) and [HTTP API](https://aws.amazon.com/api-gateway/pricing/) | Arm compute duration and memory, plus requests; HTTP API starts at **$1 per million requests**. No always-on application server. |
+| [DynamoDB](https://aws.amazon.com/dynamodb/pricing/) and [S3](https://aws.amazon.com/s3/pricing/) | On-demand reads/writes, stored inventory, photos, web assets and pipeline artifacts, plus S3 requests. Storage remains billable while idle. |
+| [CloudFront](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/) and [CloudWatch](https://aws.amazon.com/cloudwatch/pricing/) | Viewer requests and data transfer (rates depend on viewer location), log ingestion and retained logs. |
+| [CodePipeline V2](https://aws.amazon.com/codepipeline/pricing/) and [CodeBuild](https://aws.amazon.com/codebuild/pricing/) | **$0.002 per billed action-minute**, plus build compute minutes and artifacts. Manual approval waiting time is not billed by CodePipeline. |
+
+**Per-analysis example:** assume one standard Nova Pro call with 2,000 input tokens (photo, prompt and tool schema combined), 500 output tokens, no caching and no retries. Bedrock costs `(2,000 × $0.80 + 500 × $3.20) / 1,000,000 = $0.0032`, or **$3.20 for 1,000 such analyses**. This is the model charge only: add the services above. Image size, number of products, output length and retries change usage. Rates are also published in the [AWS price list for Bedrock in us-east-1](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json).
+
+`budgetUsd: 20` in [`infra/cdk.json`](infra/cdk.json) configures a **$20 monthly AWS Budget**, created only when `budgetEmail` is supplied. Actual-spend alerts fire at 80% and 100%; this is an account cost budget, **not a spending cap or automatic shutdown**. No budget is created without an alert address.
+
+**Cleanup:** follow [Teardown in the deployment guide](docs/deployment.md#8-teardown-owner-only). Approving the manual `Teardown/ApproveTeardown` stage runs `DestroyApp` and deletes the app, including inventory and photos; it keeps the pipeline and retained artifacts/logs, which may still incur storage costs. [ADR 0014](docs/adr/0014-manual-teardown-stage-after-prod.md) replaces the standalone approach in [ADR 0013](docs/adr/0013-manual-teardown-keeps-the-pipeline.md). To delete everything, use the guide's [full cleanup sequence](docs/deployment.md#delete-everything), including its list of retained resources.
+
+## License
+
+[MIT](LICENSE). Copyright (c) 2026 Cristian Montoya.
 
 ## Documentation
 
